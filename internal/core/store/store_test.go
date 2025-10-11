@@ -180,12 +180,12 @@ func TestLPush(t *testing.T) {
 
 	//test if the list length is correct
 	s.LPush(0, "list", "value3")
-	list, _ := s.data[0]["list"].([]string)
-	if len(list) != 3 {
-		t.Fatalf("Expected list length to be 3, got %d", len(list))
+	if s.GetListLength(0, "list") != 3 {
+		t.Fatalf("Expected list length to be 3, got %d", s.GetListLength(0, "list"))
 	}
 
 	//test if the list contents are correct
+	list := s.GetList(0, "list")
 	expected := []string{"value3", "value2", "value1"}
 	if !slice.Equal(list, expected) {
 		t.Fatalf("Expected list to be [value3 value2 value1], got %v", list)
@@ -205,12 +205,12 @@ func TestRPush(t *testing.T) {
 
 	//test if the list length is correct
 	s.RPush(0, "list", "value3")
-	list, _ := s.data[0]["list"].([]string)
-	if len(list) != 3 {
-		t.Fatalf("Expected list length to be 3, got %d", len(list))
+	if s.GetListLength(0, "list") != 3 {
+		t.Fatalf("Expected list length to be 3, got %d", s.GetListLength(0, "list"))
 	}
 
 	//test if the list contents are correct
+	list := s.GetList(0, "list")
 	if list[0] != "value1" || list[1] != "value2" || list[2] != "value3" {
 		t.Fatalf("Expected list to be [value3 value1 value2], got %v", list)
 	}
@@ -403,9 +403,7 @@ func TestType(t *testing.T) {
 	s.RPush(dbIndex, "myList", myList...)
 
 	// int
-	s.Lock()
-	s.data[dbIndex]["myInt"] = 123
-	s.mu.Unlock()
+	s.SetRawValue(dbIndex, "myInt", 123)
 
 	// test if myString is a string
 	stype := s.Type(dbIndex, "myString")

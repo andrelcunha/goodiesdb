@@ -13,7 +13,7 @@ import (
 
 type Store struct {
 	data    []map[string]interface{}
-	Expires []map[string]time.Time
+	expires []map[string]time.Time
 	mu      sync.RWMutex
 	aofChan chan string
 }
@@ -28,7 +28,7 @@ func NewStore(aofChan chan string) *Store {
 	}
 	return &Store{
 		data:    data,
-		Expires: expires,
+		expires: expires,
 		aofChan: aofChan,
 	}
 }
@@ -39,24 +39,71 @@ func (s *Store) Count() int {
 	return len(s.data)
 }
 
-// Lock locks the store for writing
-func (s *Store) Lock() {
-	s.mu.Lock()
-}
-
-// Unlock unlocks the store
-func (s *Store) Unlock() {
-	s.mu.Unlock()
-}
-
-// RLock locks the store for reading
-func (s *Store) RLock() {
+// GetSnapshot returns a snapshot of store data for persistence
+// This is safe to call as it returns a copy
+func (s *Store) GetSnapshot() ([]map[string]interface{}, []map[string]time.Time) {
 	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Create deep copies to avoid data races
+	dataCopy := make([]map[string]interface{}, len(s.data))
+	expiresCopy := make([]map[string]time.Time, len(s.expires))
+
+	for i := range s.data {
+		dataCopy[i] = make(map[string]interface{})
+		expiresCopy[i] = make(map[string]time.Time)
+
+		for k, v := range s.data[i] {
+			dataCopy[i][k] = v
+		}
+		for k, v := range s.expires[i] {
+			expiresCopy[i][k] = v
+		}
+	}
+
+	return dataCopy, expiresCopy
 }
 
-// RUnlock unlocks the store
-func (s *Store) RUnlock() {
-	s.mu.RUnlock()
+// RestoreFromSnapshot restores store data from persistence
+func (s *Store) RestoreFromSnapshot(data []map[string]interface{}, expires []map[string]time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.data = data
+	s.expires = expires
+}
+
+// Test helper methods - only use in tests
+// GetListLength returns the length of a list for testing
+func (s *Store) GetListLength(dbIndex int, key string) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if list, ok := s.data[dbIndex][key].([]string); ok {
+		return len(list)
+	}
+	return 0
+}
+
+// GetList returns a copy of the list for testing
+func (s *Store) GetList(dbIndex int, key string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if list, ok := s.data[dbIndex][key].([]string); ok {
+		// Return a copy to avoid data races
+		result := make([]string, len(list))
+		copy(result, list)
+		return result
+	}
+	return nil
+}
+
+// SetRawValue sets a raw value for testing (bypasses type safety)
+func (s *Store) SetRawValue(dbIndex int, key string, value interface{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data[dbIndex][key] = value
 }
 
 func (s *Store) AOFChannel() chan string {
@@ -117,7 +164,7 @@ func (s *Store) Expire(dbIndex int, key string, ttl time.Duration) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, exists := s.data[dbIndex][key]; exists {
-		s.Expires[dbIndex][key] = time.Now().Add(ttl)
+		s.expires[dbIndex][key] = time.Now().Add(ttl)
 		s.aofChan <- fmt.Sprintf("EXPIRE %d %s %d", dbIndex, key, int(ttl.Seconds()))
 		return true
 	}
@@ -175,11 +222,11 @@ func (s *Store) TTL(dbIndex int, key string) (int, error) {
 		return -2, nil
 	}
 
-	if _, ok := s.Expires[dbIndex][key]; !ok {
+	if _, ok := s.expires[dbIndex][key]; !ok {
 		return -1, nil
 	}
 
-	ttl := time.Until(s.Expires[dbIndex][key])
+	ttl := time.Until(s.expires[dbIndex][key])
 	return int(ttl.Seconds()), nil
 }
 
