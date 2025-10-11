@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"com.github.andrelcunha.goodiesdb/internal/core/store"
-	"com.github.andrelcunha.goodiesdb/pkg/persistence/aof"
-	"com.github.andrelcunha.goodiesdb/pkg/persistence/rdb"
+	"com.github.andrelcunha.goodiesdb/internal/persistence/aof"
+	"com.github.andrelcunha.goodiesdb/internal/persistence/rdb"
 )
 
 // Server represents a TCP server
