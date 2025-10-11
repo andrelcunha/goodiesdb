@@ -7,22 +7,29 @@ GoodiesDB is a Redis-compatible in-memory data store implemented in Go. It featu
 
 ### Core Structure
 - **`cmd/goodiesdb-server/main.go`**: Entry point with graceful shutdown handling and signal management
-- **`pkg/server/`**: TCP server with Redis-compatible command parsing and connection management
-- **`pkg/store/`**: Thread-safe in-memory storage with multi-database support (16 databases, indices 0-15)
-- **`pkg/persistence/`**: Dual persistence via RDB snapshots (`rdb/`) and AOF logging (`aof/`)
+- **`internal/core/server/`**: TCP server with Redis-compatible command parsing and connection management
+- **`internal/core/store/`**: Thread-safe in-memory storage with multi-database support (16 databases, indices 0-15)
+- **`internal/persistence/`**: Dual persistence via RDB snapshots (`rdb/`) and AOF logging (`aof/`)
 
 ### Key Patterns
 
 #### Database Architecture
 ```go
 // Store manages 16 separate databases (Redis-compatible)
+// All fields are private for proper encapsulation
 type Store struct {
-    Data    []map[string]interface{}  // One map per database
-    Expires []map[string]time.Time    // TTL tracking per database
-    mu      sync.RWMutex             // Thread safety
-    aofChan chan string              // AOF command logging
+    data    []map[string]interface{}  // One map per database (private)
+    expires []map[string]time.Time    // TTL tracking per database (private)
+    mu      sync.RWMutex             // Thread safety (private)
+    aofChan chan string              // AOF command logging (private)
 }
 ```
+
+#### Store Encapsulation
+- **All fields are private** - access only through methods
+- **No exposed Lock/Unlock methods** - synchronization handled internally
+- **Persistence interface**: Use `GetSnapshot()` and `RestoreFromSnapshot()` for RDB operations
+- **Test helpers**: Use `GetListLength()`, `GetList()`, and `SetRawValue()` for testing only
 
 #### Command Flow
 1. TCP connection → `handleConnection()` → `handleCommand()`
