@@ -173,7 +173,7 @@ func (s *Store) TTL(dbIndex int, key string) (int, error) {
 		return -1, nil
 	}
 
-	ttl := s.Expires[dbIndex][key].Sub(time.Now())
+	ttl := time.Until(s.Expires[dbIndex][key])
 	return int(ttl.Seconds()), nil
 }
 
