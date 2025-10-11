@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"com.github.andrelcunha.GoodiesDB/internal/utils/slice"
+	"com.github.andrelcunha.goodiesdb/internal/utils/slice"
 )
 
 type Store struct {

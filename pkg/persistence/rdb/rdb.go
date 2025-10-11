@@ -4,7 +4,7 @@ import (
 	"encoding/gob"
 	"os"
 
-	"com.github.andrelcunha.GoodiesDB/pkg/store"
+	"com.github.andrelcunha.goodiesdb/pkg/store"
 )
 
 // SaveSnapshot saves the current state of the store to a file

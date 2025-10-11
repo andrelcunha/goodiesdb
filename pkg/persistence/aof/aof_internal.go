@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"time"
 
-	"com.github.andrelcunha.GoodiesDB/pkg/store"
+	"com.github.andrelcunha.goodiesdb/pkg/store"
 )
 
 func aofRename(parts []string, s *store.Store, dbIndex int) {

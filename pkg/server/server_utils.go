@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"com.github.andrelcunha.GoodiesDB/pkg/persistence/aof"
-	"com.github.andrelcunha.GoodiesDB/pkg/persistence/rdb"
+	"com.github.andrelcunha.goodiesdb/pkg/persistence/aof"
+	"com.github.andrelcunha.goodiesdb/pkg/persistence/rdb"
 )
 
 func (s *Server) isAuthenticates(conn net.Conn) bool {

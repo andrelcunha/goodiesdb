@@ -1,4 +1,4 @@
-module com.github.andrelcunha.GoodiesDB
+module com.github.andrelcunha.goodiesdb
 
 go 1.23.3
 

@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"com.github.andrelcunha.GoodiesDB/pkg/server"
+	"com.github.andrelcunha.goodiesdb/pkg/server"
 	"github.com/joho/godotenv"
 )
 
