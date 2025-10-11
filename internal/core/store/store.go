@@ -12,7 +12,7 @@ import (
 )
 
 type Store struct {
-	Data    []map[string]interface{}
+	data    []map[string]interface{}
 	Expires []map[string]time.Time
 	mu      sync.RWMutex
 	aofChan chan string
@@ -27,10 +27,16 @@ func NewStore(aofChan chan string) *Store {
 		expires[i] = make(map[string]time.Time)
 	}
 	return &Store{
-		Data:    data,
+		data:    data,
 		Expires: expires,
 		aofChan: aofChan,
 	}
+}
+
+func (s *Store) Count() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.data)
 }
 
 // Lock locks the store for writing
@@ -61,7 +67,7 @@ func (s *Store) AOFChannel() chan string {
 func (s *Store) Set(dbIndex int, key, value string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.Data[dbIndex][key] = value
+	s.data[dbIndex][key] = value
 	s.aofChan <- fmt.Sprintf("SET %d %s %s", dbIndex, key, value)
 }
 
@@ -72,7 +78,7 @@ func (s *Store) Get(dbIndex int, key string) (string, bool) {
 	if s.isExpired(dbIndex, key) {
 		return "", false
 	}
-	value, ok := s.Data[dbIndex][key].(string)
+	value, ok := s.data[dbIndex][key].(string)
 	return value, ok
 }
 
@@ -90,7 +96,7 @@ func (s *Store) Exists(dbIndex int, key string) bool {
 	if s.isExpired(dbIndex, key) {
 		return false
 	}
-	_, ok := s.Data[dbIndex][key]
+	_, ok := s.data[dbIndex][key]
 	return ok
 }
 
@@ -98,10 +104,10 @@ func (s *Store) Exists(dbIndex int, key string) bool {
 func (s *Store) SetNX(dbIndex int, key, value string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, exists := s.Data[dbIndex][key]; exists {
+	if _, exists := s.data[dbIndex][key]; exists {
 		return false
 	}
-	s.Data[dbIndex][key] = value
+	s.data[dbIndex][key] = value
 	s.aofChan <- fmt.Sprintf("SET %d %s %s", dbIndex, key, value)
 	return true
 }
@@ -110,7 +116,7 @@ func (s *Store) SetNX(dbIndex int, key, value string) bool {
 func (s *Store) Expire(dbIndex int, key string, ttl time.Duration) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, exists := s.Data[dbIndex][key]; exists {
+	if _, exists := s.data[dbIndex][key]; exists {
 		s.Expires[dbIndex][key] = time.Now().Add(ttl)
 		s.aofChan <- fmt.Sprintf("EXPIRE %d %s %d", dbIndex, key, int(ttl.Seconds()))
 		return true
@@ -123,7 +129,7 @@ func (s *Store) Incr(dbIndex int, key string) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	value, ok := s.Data[dbIndex][key].(string)
+	value, ok := s.data[dbIndex][key].(string)
 	if !ok {
 		value = "0"
 	}
@@ -134,7 +140,7 @@ func (s *Store) Incr(dbIndex int, key string) (int, error) {
 	}
 
 	intValue++
-	s.Data[dbIndex][key] = strconv.Itoa(intValue)
+	s.data[dbIndex][key] = strconv.Itoa(intValue)
 	s.aofChan <- fmt.Sprintf("INCR %d %s", dbIndex, key)
 	return intValue, nil
 }
@@ -144,7 +150,7 @@ func (s *Store) Decr(dbIndex int, key string) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	value, ok := s.Data[dbIndex][key].(string)
+	value, ok := s.data[dbIndex][key].(string)
 	if !ok {
 		value = "0"
 	}
@@ -155,7 +161,7 @@ func (s *Store) Decr(dbIndex int, key string) (int, error) {
 	}
 
 	intValue--
-	s.Data[dbIndex][key] = strconv.Itoa(intValue)
+	s.data[dbIndex][key] = strconv.Itoa(intValue)
 	s.aofChan <- fmt.Sprintf("DECR %d %s", dbIndex, key)
 	return intValue, nil
 }
@@ -165,7 +171,7 @@ func (s *Store) TTL(dbIndex int, key string) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, ok := s.Data[dbIndex][key]; !ok {
+	if _, ok := s.data[dbIndex][key]; !ok {
 		return -2, nil
 	}
 
@@ -183,12 +189,12 @@ func (s *Store) LPush(dbIndex int, key string, values ...string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	list, _ := s.Data[dbIndex][key].([]string)
+	list, _ := s.data[dbIndex][key].([]string)
 	// Reverse values
 	slice.Reverse(values)
 	list = append(values, list...)
 
-	s.Data[dbIndex][key] = list
+	s.data[dbIndex][key] = list
 	s.aofChan <- logString
 	return len(list)
 }
@@ -199,9 +205,9 @@ func (s *Store) RPush(dbIndex int, key string, values ...string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	list, _ := s.Data[dbIndex][key].([]string)
+	list, _ := s.data[dbIndex][key].([]string)
 	list = append(list, values...)
-	s.Data[dbIndex][key] = list
+	s.data[dbIndex][key] = list
 	s.aofChan <- logString
 	return len(list)
 }
@@ -227,7 +233,7 @@ func (s *Store) LPop(dbIndex int, key string, pcount *int) (interface{}, error) 
 		return nil, fmt.Errorf("value is out of range, must be positive")
 	}
 
-	list, ok := s.Data[dbIndex][key].([]string)
+	list, ok := s.data[dbIndex][key].([]string)
 	if !ok {
 		return nil, nil
 	}
@@ -241,7 +247,7 @@ func (s *Store) LPop(dbIndex int, key string, pcount *int) (interface{}, error) 
 	popped := list[:count]
 
 	// Remove the popped elements from the list
-	s.Data[dbIndex][key] = list[count:]
+	s.data[dbIndex][key] = list[count:]
 
 	// Log the operation
 	s.aofChan <- fmt.Sprintf("LPOP %d %s %d", dbIndex, key, count)
@@ -274,7 +280,7 @@ func (s *Store) RPop(dbIndex int, key string, pcount *int) (interface{}, error) 
 	if count < 0 && pcount != nil {
 		return nil, fmt.Errorf("value is out of range, must be positive")
 	} else {
-		list, ok := s.Data[dbIndex][key].([]string)
+		list, ok := s.data[dbIndex][key].([]string)
 		if !ok {
 			return nil, nil
 		}
@@ -288,7 +294,7 @@ func (s *Store) RPop(dbIndex int, key string, pcount *int) (interface{}, error) 
 		popped := list[(len - count):]
 
 		// Remove the popped elements from the list
-		s.Data[dbIndex][key] = list[:(len - count)]
+		s.data[dbIndex][key] = list[:(len - count)]
 
 		// Log the operation
 		s.aofChan <- fmt.Sprintf("RPOP %d %s %d", dbIndex, key, count)
@@ -311,7 +317,7 @@ func (s *Store) LRange(dbIndex int, key string, start, stop int) ([]string, erro
 		return nil, nil
 	}
 
-	list, ok := s.Data[dbIndex][key].([]string)
+	list, ok := s.data[dbIndex][key].([]string)
 	if !ok {
 		return nil, nil
 	}
@@ -349,7 +355,7 @@ func (s *Store) LTrim(dbIndex int, key string, start, stop int) error {
 		return nil
 	}
 
-	list, ok := s.Data[dbIndex][key].([]string)
+	list, ok := s.data[dbIndex][key].([]string)
 	if !ok {
 		return nil
 	}
@@ -376,7 +382,7 @@ func (s *Store) LTrim(dbIndex int, key string, start, stop int) error {
 	}
 
 	// Remove the elements from the list
-	s.Data[dbIndex][key] = list[start : stop+1]
+	s.data[dbIndex][key] = list[start : stop+1]
 
 	// Log the operation
 	s.aofChan <- fmt.Sprintf("LTRIM %d %s %d %d", dbIndex, key, start, stop)
@@ -395,11 +401,11 @@ func (s *Store) Rename(dbIndex int, key, newkey string) error {
 	}
 
 	// Check if the new key already exists
-	if _, ok := s.Data[dbIndex][newkey]; ok {
+	if _, ok := s.data[dbIndex][newkey]; ok {
 		// Overwrite the destination
 		s.delKey(dbIndex, newkey)
 	}
-	s.Data[dbIndex][newkey] = s.Data[dbIndex][key]
+	s.data[dbIndex][newkey] = s.data[dbIndex][key]
 	s.delKey(dbIndex, key)
 
 	// Log the operation
@@ -414,7 +420,7 @@ func (s *Store) Type(dbIndex int, key string) string {
 	defer s.mu.Unlock()
 
 	// verify if key exists
-	if val, exists := s.Data[dbIndex][key]; exists {
+	if val, exists := s.data[dbIndex][key]; exists {
 		switch val.(type) {
 		case string:
 			return "string"
@@ -439,7 +445,7 @@ func (s *Store) Keys(dbIndex int, pattern string) ([]string, error) {
 		return nil, err
 	}
 
-	for key := range s.Data[dbIndex] {
+	for key := range s.data[dbIndex] {
 		if re.MatchString(key) {
 			keys = append(keys, key)
 		}
@@ -460,7 +466,7 @@ func (s *Store) FlushAll() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for dbIndex := range s.Data {
+	for dbIndex := range s.data {
 		s.flushDb(dbIndex)
 	}
 	s.aofChan <- "FLUSHALL"

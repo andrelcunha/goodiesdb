@@ -93,7 +93,7 @@ func (s *Server) SelectDb(conn net.Conn, dbIndex int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if dbIndex < 0 || dbIndex >= len(s.store.Data) {
+	if dbIndex < 0 || dbIndex >= s.store.Count() {
 		return fmt.Errorf("invalid DB index")
 	}
 	s.connectionDbs[conn] = dbIndex

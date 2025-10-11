@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"com.github.andrelcunha.goodiesdb/internal/core/store"
-	"com.github.andrelcunha.goodiesdb/pkg/persistence/aof"
+	"com.github.andrelcunha.goodiesdb/internal/persistence/aof"
 )
 
 func TestSaveLoadSnapshot(t *testing.T) {

@@ -180,7 +180,7 @@ func TestLPush(t *testing.T) {
 
 	//test if the list length is correct
 	s.LPush(0, "list", "value3")
-	list, _ := s.Data[0]["list"].([]string)
+	list, _ := s.data[0]["list"].([]string)
 	if len(list) != 3 {
 		t.Fatalf("Expected list length to be 3, got %d", len(list))
 	}
@@ -205,7 +205,7 @@ func TestRPush(t *testing.T) {
 
 	//test if the list length is correct
 	s.RPush(0, "list", "value3")
-	list, _ := s.Data[0]["list"].([]string)
+	list, _ := s.data[0]["list"].([]string)
 	if len(list) != 3 {
 		t.Fatalf("Expected list length to be 3, got %d", len(list))
 	}
@@ -233,7 +233,7 @@ func TestLPop(t *testing.T) {
 	//test if LPOP returns error when called with count argument smaller than 0
 	t.Log("test if LPOP returns error when called with count argument smaller than 0")
 	count := -1
-	value, err := s.LPop(0, "list", &count)
+	_, err := s.LPop(0, "list", &count)
 	if err == nil {
 		t.Fatalf("Expected error when calling LPOP with count smaller than 0")
 	}
@@ -264,7 +264,7 @@ func TestLPop(t *testing.T) {
 
 	//test if LPOP returns nil when the list is empty
 	t.Log("test if LPOP returns nil when the list is empty")
-	value, err = s.LPop(0, "list", &count)
+	value, _ = s.LPop(0, "list", &count)
 	if value != nil {
 		t.Fatalf("Expected nil, got %v", value)
 	}
@@ -287,7 +287,7 @@ func TestRPop(t *testing.T) {
 	//test if RPop returns error when called with count argument smaller than 0
 	t.Log("test if RPop returns error when called with count argument smaller than 0")
 	count := -1
-	value, err := s.RPop(0, "list", &count)
+	_, err := s.RPop(0, "list", &count)
 	if err == nil {
 		t.Fatalf("Expected error when calling RPop with count smaller than 0")
 	}
@@ -320,7 +320,7 @@ func TestRPop(t *testing.T) {
 
 	//test if RPop returns nil when the list is empty
 	t.Log("test if RPop returns nil when the list is empty")
-	value, err = s.RPop(0, "list", &count)
+	value, _ = s.RPop(0, "list", &count)
 	if value != nil {
 		t.Fatalf("Expected nil, got %v", value)
 	}
@@ -364,7 +364,7 @@ func TestRename(t *testing.T) {
 	// test if Rename returns error when key does not exist
 	t.Log("test if Rename returns error when key does not exist")
 	s.Rename(0, "key1", "key2")
-	value, ok := s.Get(0, "key2")
+	_, ok := s.Get(0, "key2")
 	if ok {
 		t.Fatalf("Expected ok equal false, got %v", ok)
 	}
@@ -373,7 +373,7 @@ func TestRename(t *testing.T) {
 	t.Log("test if Rename does not rename when key exists")
 	s.Set(0, "key1", "value1")
 	s.Rename(0, "key1", "key2")
-	value, ok = s.Get(0, "key2")
+	value, _ := s.Get(0, "key2")
 	if value != "value1" {
 		t.Fatalf("Expected value1, got %s", value)
 	}
@@ -385,7 +385,7 @@ func TestRename(t *testing.T) {
 	s.Set(0, "key1", "value1")
 	s.Set(0, "key2", "value2")
 	s.Rename(0, "key1", "key2")
-	value, ok = s.Get(0, "key2")
+	value, _ = s.Get(0, "key2")
 	if value != "value1" {
 		t.Fatalf("Expected value1, got %s", value)
 	}
@@ -404,7 +404,7 @@ func TestType(t *testing.T) {
 
 	// int
 	s.Lock()
-	s.Data[dbIndex]["myInt"] = 123
+	s.data[dbIndex]["myInt"] = 123
 	s.mu.Unlock()
 
 	// test if myString is a string
