@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"com.github.andrelcunha.goodiesdb/internal/core/store"
-	"com.github.andrelcunha.goodiesdb/internal/persistence/aof"
-	"com.github.andrelcunha.goodiesdb/internal/persistence/rdb"
+	"github.com/andrelcunha/goodiesdb/internal/core/store"
+	"github.com/andrelcunha/goodiesdb/internal/persistence/aof"
+	"github.com/andrelcunha/goodiesdb/internal/persistence/rdb"
 )
 
 // Server represents a TCP server

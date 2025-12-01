@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"com.github.andrelcunha.goodiesdb/internal/core/store"
+	"github.com/andrelcunha/goodiesdb/internal/core/store"
 )
 
 // AOFWriter writes commands to a file

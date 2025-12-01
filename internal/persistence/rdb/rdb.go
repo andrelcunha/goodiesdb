@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"com.github.andrelcunha.goodiesdb/internal/core/store"
+	"github.com/andrelcunha/goodiesdb/internal/core/store"
 )
 
 // SaveSnapshot saves the current state of the store to a file

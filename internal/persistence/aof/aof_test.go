@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"com.github.andrelcunha.goodiesdb/internal/core/store"
-	"com.github.andrelcunha.goodiesdb/internal/utils/slice"
+	"github.com/andrelcunha/goodiesdb/internal/core/store"
+	"github.com/andrelcunha/goodiesdb/internal/utils/slice"
 )
 
 func TestRebuildStoreFromAOF(t *testing.T) {
