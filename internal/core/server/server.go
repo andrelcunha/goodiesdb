@@ -14,6 +14,8 @@ import (
 	"github.com/andrelcunha/goodiesdb/internal/core/store"
 	"github.com/andrelcunha/goodiesdb/internal/persistence/aof"
 	"github.com/andrelcunha/goodiesdb/internal/persistence/rdb"
+	"github.com/andrelcunha/goodiesdb/internal/protocol"
+	"github.com/andrelcunha/goodiesdb/internal/protocol/resp2"
 )
 
 // Server represents a TCP server
@@ -21,10 +23,11 @@ type Server struct {
 	store                    *store.Store
 	config                   *Config
 	mu                       sync.Mutex
-	authenticatedConnections map[net.Conn]bool
+	authenticatedConnections map[net.Conn]bool // TODO create a connection abstraction to hold more info
 	connectionDbs            map[net.Conn]int
 	shutdownChan             chan struct{}
 	dataDir                  string
+	protocol                 protocol.Protocol
 }
 
 // NewServer creates a new server
@@ -46,6 +49,7 @@ func NewServer(config *Config) *Server {
 		connectionDbs:            make(map[net.Conn]int),
 		shutdownChan:             make(chan struct{}),
 		dataDir:                  config.DataDir,
+		protocol:                 &resp2.RESP2Protocol{},
 	}
 }
 
@@ -86,22 +90,8 @@ func (s *Server) Start() error {
 			fmt.Println("Error accepting connection:", err)
 			continue
 		}
-		go s.handleConnection(conn)
-	}
-}
-
-// handleConnection handles a single client connection
-func (s *Server) handleConnection(conn net.Conn) {
-	defer conn.Close()
-	reader := bufio.NewReader(conn)
-
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Println("Error reading from connection:", err)
-			return
-		}
-		s.handleCommand(conn, strings.TrimSpace(line))
+		// go s.handleConnection(conn)
+		go s.handleConn(conn)
 	}
 }
 
@@ -118,297 +108,329 @@ func (s *Server) Shutdown() {
 	}
 }
 
-// handleCommand handles a single command
-func (s *Server) handleCommand(conn net.Conn, cmd string) {
-	parts := strings.Fields(cmd)
+func (s *Server) handleConn(conn net.Conn) {
+	defer conn.Close()
+	reader := bufio.NewReader(conn)
+	writer := bufio.NewWriter(conn)
 
-	if len(parts) == 0 {
-		return
+	for {
+		value, err := s.protocol.Parse(reader)
+
+		if err != nil {
+			if err.Error() == "EOF" {
+				return
+			}
+			reply := protocol.ErrorString(fmt.Sprintf("parse error:", err))
+			s.protocol.Encode(writer, reply)
+			writer.Flush()
+			continue
+		}
+
+		// Execute commmand
+		reply, err := s.executeCommand(conn, value)
+		if err != nil {
+			reply := protocol.ErrorString(fmt.Sprintf("ERR %s", err.Error()))
+			s.protocol.Encode(writer, reply)
+			writer.Flush()
+			continue
+		}
+
+		s.protocol.Encode(writer, reply)
+		writer.Flush()
+		continue
+	}
+}
+
+func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (protocol.RESPValue, error) {
+	// RESPValue as protocol.Array ([]RESPValue)
+	arr, ok := request.(protocol.Array)
+	if !ok {
+		return protocol.ErrorString("ERR expected array"), fmt.Errorf("expected array, got %T", request)
 	}
 
-	//check authentication
-	if !s.isAuthenticates(conn) && parts[0] != "AUTH" {
-		fmt.Fprintln(conn, "NOAUTH Authentication required.")
-		return
+	rawParts := arr
+
+	if len(rawParts) == 0 {
+		return "", nil
 	}
+
+	parts := make([]string, len(rawParts))
+	for i, part := range rawParts {
+		switch v := part.(type) {
+		case protocol.BulkString:
+			parts[i] = string(v)
+		case protocol.SimpleString:
+			parts[i] = string(v)
+		case string:
+			parts[i] = v
+		default:
+			return protocol.ErrorString("ERR invalid argument type"), fmt.Errorf("invalid argument type: %T", v)
+		}
+	}
+	fmt.Println("Executing command:", parts[0])
+
+	// //check authentication
+	// if !s.isAuthenticates(conn) && strings.ToUpper(parts[0]) != "AUTH" {
+	// 	return protocol.ErrorString("NOAUTH Authentication required."), nil
+	// }
 
 	dbIndex := s.getCurrentDb(conn)
 
-	switch parts[0] {
+	switch strings.ToUpper(parts[0]) {
 
 	case "AUTH":
 		if len(parts) != 2 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'AUTH' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'AUTH' command"), nil
 		}
 		if parts[1] == s.config.Password {
 			s.mu.Lock()
 			s.authenticatedConnections[conn] = true
 			s.mu.Unlock()
-			fmt.Fprintln(conn, "OK")
+			return "OK", nil
 		} else {
-			fmt.Fprintln(conn, "ERR invalid password")
+			return protocol.ErrorString("ERR invalid password"), nil
 		}
 
 	case "SET":
 		if len(parts) != 3 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'SET' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'SET' command"), nil
+
 		}
 		s.store.Set(dbIndex, parts[1], parts[2])
-		fmt.Fprintln(conn, "OK")
+		return "OK", nil
 
 	case "GET":
 		if len(parts) != 2 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'GET' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'GET' command"), nil
 		}
 		value, ok := s.store.Get(dbIndex, parts[1])
 		if !ok {
-			fmt.Fprintln(conn, "NULL")
+			return "NULL", nil
 		} else {
-			fmt.Fprintln(conn, value)
+			return value, nil
 		}
 
 	case "DEL":
 		if len(parts) != 2 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'DEL' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'DEL' command"), nil
 		}
 		s.store.Del(dbIndex, parts[1])
-		fmt.Fprintln(conn, "OK")
+		return "OK", nil
 
 	case "EXISTS":
 		if len(parts) != 2 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'EXISTS' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'EXISTS' command"), nil
 		}
 		exists := s.store.Exists(dbIndex, parts[1])
 		if exists {
-			fmt.Fprintln(conn, 1)
+			return "1", nil
 		} else {
-			fmt.Fprintln(conn, 0)
+			return "0", nil
 		}
 
 	case "SETNX":
 		if len(parts) != 3 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'SETNX' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'SETNX' command"), nil
 		}
 		if s.store.SetNX(dbIndex, parts[1], parts[2]) {
-			fmt.Fprintln(conn, 1)
+			return "1", nil
 		} else {
-			fmt.Fprintln(conn, 0)
+			return "0", nil
 		}
 
 	case "EXPIRE":
 		if len(parts) != 3 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'EXPIRE' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'EXPIRE' command"), nil
 		}
 		key := parts[1]
 		ttl, err := strconv.Atoi(parts[2])
 		if err != nil {
-			fmt.Fprintln(conn, "ERR invalid TTL")
-			return
+			return protocol.ErrorString("ERR invalid TTL"), nil
 		}
 		duration := time.Duration(ttl) * time.Second
 		if s.store.Expire(dbIndex, key, duration) {
-			fmt.Fprintln(conn, 1)
+			return "1", nil
 		} else {
-			fmt.Fprintln(conn, 0)
+			return "0", nil
 		}
 
 	case "INCR":
 		if len(parts) != 2 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'INCR' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'INCR' command"), nil
 		}
 		newValue, err := s.store.Incr(dbIndex, parts[1])
 		if err != nil {
-			fmt.Fprintln(conn, "ERR ", err.Error())
-			return
+			return protocol.ErrorString("ERR " + err.Error()), nil
 		}
-		fmt.Fprintln(conn, newValue)
+		return newValue, nil
 
 	case "DECR":
 		if len(parts) != 2 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'DECR' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'DECR' command"), nil
 		}
 		newValue, err := s.store.Decr(dbIndex, parts[1])
 		if err != nil {
-			fmt.Fprintln(conn, "ERR ", err.Error())
-			return
+			return protocol.ErrorString("ERR " + err.Error()), nil
 		}
-		fmt.Fprintln(conn, newValue)
+		return newValue, nil
 
 	case "TTL":
 		if len(parts) != 2 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'TTL' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'TTL' command"), nil
 		}
 		ttl, err := s.store.TTL(dbIndex, parts[1])
 		if err != nil {
-			fmt.Fprintln(conn, "ERR ", err.Error())
-			return
+			return protocol.ErrorString("ERR " + err.Error()), nil
 		}
-		fmt.Fprintln(conn, ttl)
+		return ttl, nil
 
 	case "SELECT":
 		if len(parts) != 2 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'SELECT' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'SELECT' command"), nil
 		}
 		dbIndex, err := strconv.Atoi(parts[1])
 		if err != nil {
-			fmt.Fprintln(conn, "ERR invalid DB index")
-			return
+			return protocol.ErrorString("ERR invalid DB index"), nil
 		}
 		err = s.SelectDb(conn, dbIndex)
 		if err != nil {
-			fmt.Fprintln(conn, "ERR ", err.Error())
-			return
+			return protocol.ErrorString("ERR " + err.Error()), nil
 		}
-		fmt.Fprintln(conn, "OK")
+		return "OK", nil
 
 	case "LPUSH":
 		if len(parts) < 3 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'LPUSH' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'LPUSH' command"), nil
 		}
-		length := s.store.LPush(dbIndex, parts[1], parts[2:]...)
-		fmt.Fprintln(conn, length)
+		slice := make([]any, len(parts)-2)
+		for i := 2; i < len(parts); i++ {
+			slice[i-2] = parts[i]
+		}
+		length := s.store.LPush(dbIndex, parts[1], slice...)
+		return length, nil
 
 	case "RPUSH":
 		if len(parts) < 3 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'RPUSH' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'RPUSH' command"), nil
 		}
-		length := s.store.RPush(dbIndex, parts[1], parts[2:]...)
-		fmt.Fprintln(conn, length)
+		slice := make([]any, len(parts)-2)
+		for i := 2; i < len(parts); i++ {
+			slice[i-2] = parts[i]
+		}
+		length := s.store.RPush(dbIndex, parts[1], slice...)
+		return length, nil
 
 	case "LPOP":
 		if len(parts) != 2 && len(parts) != 3 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'LPOP' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'LPOP' command"), nil
 		}
 		var count *int
 		if len(parts) == 3 {
 			c, err := strconv.Atoi(parts[2])
+			//parts[2] should be already parsed as int
+			// c, ok := parts[2].(int)
 			if err != nil {
-				fmt.Fprintln(conn, "ERR value is out of range, must be positive")
-				return
+				return protocol.ErrorString("ERR value is out of range, must be positive"), nil
 			}
 			count = &c
 		}
 		value, err := s.store.LPop(dbIndex, parts[1], count)
 		if err != nil {
-			fmt.Fprintln(conn, "ERR ", err.Error())
-			return
+			return protocol.ErrorString("ERR " + err.Error()), nil
 		}
 		fmt.Fprintln(conn, value)
 
 	case "RPOP":
 		if len(parts) != 2 && len(parts) != 3 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'RPOP' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'RPOP' command"), nil
 		}
 		var count *int
 		if len(parts) == 3 {
 			c, err := strconv.Atoi(parts[2])
 			if err != nil {
-				fmt.Fprintln(conn, "ERR value is out of range, must be positive")
-				return
+				return protocol.ErrorString("ERR value is out of range, must be positive"), nil
 			}
 			count = &c
 		}
 		value, err := s.store.RPop(dbIndex, parts[1], count)
 		if err != nil {
-			fmt.Fprintln(conn, "ERR ", err.Error())
-			return
+			return protocol.ErrorString("ERR " + err.Error()), nil
 		}
-		fmt.Fprintln(conn, value)
+		return value, nil
 
 	case "LRANGE":
 		if len(parts) != 4 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'LRANGE' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'LRANGE' command"), nil
 		}
 		start, err1 := strconv.Atoi(parts[2])
 		stop, err2 := strconv.Atoi(parts[3])
 		if err1 != nil || err2 != nil {
-			fmt.Fprintln(conn, "ERR value is out of range, must be positive")
-			return
+			return protocol.ErrorString("ERR value is out of range, must be positive"), nil
 		}
 		values, err := s.store.LRange(dbIndex, parts[1], start, stop)
 		if err != nil {
-			fmt.Fprintln(conn, "ERR ", err.Error())
-			return
+			return protocol.ErrorString("ERR " + err.Error()), nil
 		}
-		fmt.Fprintln(conn, values)
+		return values, nil
 
 	case "LTRIM":
 		if len(parts) != 4 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'LTRIM' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'LTRIM' command"), nil
 		}
 		start, err1 := strconv.Atoi(parts[2])
 		stop, err2 := strconv.Atoi(parts[3])
 		if err1 != nil || err2 != nil {
-			fmt.Fprintln(conn, "ERR value is out of range, must be positive")
-			return
+			return protocol.ErrorString("ERR value is out of range, must be positive"), nil
 		}
 		err := s.store.LTrim(dbIndex, parts[1], start, stop)
 		if err != nil {
-			fmt.Fprintln(conn, "ERR ", err.Error())
-			return
+			return protocol.ErrorString("ERR " + err.Error()), nil
 		}
-		fmt.Fprintln(conn, "OK")
+		return protocol.SimpleString("OK"), nil
 
 	case "RENAME":
 		if len(parts) != 3 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'RENAME' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'RENAME' command"), nil
 		}
 		if err := s.store.Rename(dbIndex, parts[1], parts[2]); err != nil {
-			fmt.Fprintln(conn, "ERR", err.Error())
-			return
+			return protocol.ErrorString("ERR " + err.Error()), nil
 		}
-		fmt.Fprintln(conn, "OK")
+		return protocol.SimpleString("OK"), nil
 
 	case "TYPE":
 		if len(parts) != 2 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'TYPE' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'TYPE' command"), nil
 		}
 		vtype := s.store.Type(dbIndex, parts[1])
-		fmt.Fprintln(conn, vtype)
+		return protocol.SimpleString(vtype), nil
 
 	case "KEYS":
 		if len(parts) != 2 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'TYPE' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'TYPE' command"), nil
 		}
 		pattern := parts[1]
 		keys, err := s.store.Keys(dbIndex, pattern)
 		if err != nil {
-			fmt.Fprintln(conn, "ERR ", err.Error())
+			return protocol.ErrorString("ERR " + err.Error()), nil
 		}
-		fmt.Fprintln(conn, keys)
+		return keys, nil
 
 	case "INFO":
-		fmt.Fprintln(conn, s.Info())
+		fmt.Println("Sending info")
+		return s.Info(), nil
 
 	case "PING":
-		fmt.Fprintln(conn, s.Ping())
+		return protocol.SimpleString(s.Ping()), nil
 
 	case "ECHO":
 		if len(parts) < 2 {
-			fmt.Fprintln(conn, "ERR wrong number of arguments for 'ECHO' command")
-			return
+			return protocol.ErrorString("ERR wrong number of arguments for 'ECHO' command"), nil
 		}
-		fmt.Fprintln(conn, s.Echo(strings.Join(parts[1:], " ")))
+		strs := make([]string, len(parts)-1)
+		for i := 1; i < len(parts); i++ {
+			strs[i-1] = fmt.Sprintf("%v", parts[i])
+		}
+		return protocol.SimpleString(s.Echo(strings.Join(strs, " "))), nil
 
 	case "QUIT":
 		s.Quit(conn)
@@ -422,7 +444,7 @@ func (s *Server) handleCommand(conn net.Conn, cmd string) {
 		fmt.Fprintln(conn, "OK")
 
 	default:
-		fmt.Fprintln(conn, "ERR unknown command '"+parts[0]+"'")
-		fmt.Fprintln(conn, "Available commands: "+strings.Join(s.availableCommands(), " "))
+		return protocol.ErrorString("ERR unknown command '" + parts[0] + "'"), nil
 	}
+	return nil, nil
 }

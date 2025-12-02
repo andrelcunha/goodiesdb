@@ -400,7 +400,11 @@ func TestType(t *testing.T) {
 	// Arrange
 	s.Set(dbIndex, "myString", "value1")
 	myList := []string{"one", "two", "three"}
-	s.RPush(dbIndex, "myList", myList...)
+	mySlice := make([]any, len(myList))
+	for i, v := range myList {
+		mySlice[i] = v
+	}
+	s.RPush(dbIndex, "myList", mySlice...)
 
 	// int
 	s.SetRawValue(dbIndex, "myInt", 123)
@@ -443,7 +447,11 @@ func TestKeys(t *testing.T) {
 	s.Set(indexDb, "key1", "value1")
 	s.Set(indexDb, "key2", "value2")
 	list1 := []string{"one", "two", "tree"}
-	s.RPush(indexDb, "list1", list1...)
+	mySlice := make([]any, len(list1))
+	for i, v := range list1 {
+		mySlice[i] = v
+	}
+	s.RPush(indexDb, "list1", mySlice...)
 
 	keys, err := s.Keys(indexDb, "*")
 	if err != nil {

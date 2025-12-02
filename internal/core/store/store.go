@@ -111,7 +111,7 @@ func (s *Store) AOFChannel() chan string {
 }
 
 // Set sets the value for a key
-func (s *Store) Set(dbIndex int, key, value string) {
+func (s *Store) Set(dbIndex int, key string, value any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.data[dbIndex][key] = value
@@ -231,12 +231,17 @@ func (s *Store) TTL(dbIndex int, key string) (int, error) {
 }
 
 // LPush inserts values at the begining of a list
-func (s *Store) LPush(dbIndex int, key string, values ...string) int {
-	logString := fmt.Sprintf("LPUSH %d %s %s", dbIndex, key, strings.Join(values, " "))
+func (s *Store) LPush(dbIndex int, key string, values ...any) int {
+	// Convert []any to []string for logging
+	strValues := make([]string, len(values))
+	for i, v := range values {
+		strValues[i] = fmt.Sprintf("%v", v)
+	}
+	logString := fmt.Sprintf("LPUSH %d %s %s", dbIndex, key, strings.Join(strValues, " "))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	list, _ := s.data[dbIndex][key].([]string)
+	list, _ := s.data[dbIndex][key].([]any)
 	// Reverse values
 	slice.Reverse(values)
 	list = append(values, list...)
@@ -247,12 +252,16 @@ func (s *Store) LPush(dbIndex int, key string, values ...string) int {
 }
 
 // RPush inserts values at the end of a list
-func (s *Store) RPush(dbIndex int, key string, values ...string) int {
-	logString := fmt.Sprintf("RPUSH %d %s %s", dbIndex, key, strings.Join(values, " "))
+func (s *Store) RPush(dbIndex int, key string, values ...any) int {
+	strValues := make([]string, len(values))
+	for i, v := range values {
+		strValues[i] = fmt.Sprintf("%v", v)
+	}
+	logString := fmt.Sprintf("RPUSH %d %s %s", dbIndex, key, strings.Join(strValues, " "))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	list, _ := s.data[dbIndex][key].([]string)
+	list, _ := s.data[dbIndex][key].([]any)
 	list = append(list, values...)
 	s.data[dbIndex][key] = list
 	s.aofChan <- logString

@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/andrelcunha/goodiesdb/internal/persistence/aof"
 	"github.com/andrelcunha/goodiesdb/internal/persistence/rdb"
+	"github.com/andrelcunha/goodiesdb/internal/protocol"
 )
 
 func (s *Server) isAuthenticates(conn net.Conn) bool {
@@ -60,13 +62,17 @@ func (s *Server) availableCommands() []string {
 }
 
 // Info returns server info
-func (s *Server) Info() string {
+func (s *Server) Info() protocol.BulkString {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return fmt.Sprintf("Server info:\n\n"+
-		"Version: %s\n",
-		s.config.Version,
-	)
+	//
+	var b strings.Builder
+	b.WriteString("# Server\n")
+	b.WriteString(fmt.Sprintf("version:%s\n", s.config.Version))
+	b.WriteString(fmt.Sprintf("uptime_in_seconds:%d\n", 1000))
+	b.WriteString(fmt.Sprintf("connected_clients:%d\n", 0))
+	bytArr := []byte(b.String())
+	return protocol.BulkString(bytArr)
 }
 
 // Ping returns pong
