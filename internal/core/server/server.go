@@ -27,7 +27,7 @@ type Server struct {
 	connectionDbs            map[net.Conn]int
 	shutdownChan             chan struct{}
 	dataDir                  string
-	protocol                 protocol.Protocol
+	Protocol                 protocol.Protocol
 }
 
 // NewServer creates a new server
@@ -49,7 +49,7 @@ func NewServer(config *Config) *Server {
 		connectionDbs:            make(map[net.Conn]int),
 		shutdownChan:             make(chan struct{}),
 		dataDir:                  config.DataDir,
-		protocol:                 &resp2.RESP2Protocol{},
+		Protocol:                 &resp2.RESP2Protocol{},
 	}
 }
 
@@ -114,14 +114,14 @@ func (s *Server) handleConn(conn net.Conn) {
 	writer := bufio.NewWriter(conn)
 
 	for {
-		value, err := s.protocol.Parse(reader)
+		value, err := s.Protocol.Parse(reader)
 
 		if err != nil {
 			if err.Error() == "EOF" {
 				return
 			}
 			reply := protocol.ErrorString(fmt.Sprintf("parse error:", err))
-			s.protocol.Encode(writer, reply)
+			s.Protocol.Encode(writer, reply)
 			writer.Flush()
 			continue
 		}
@@ -130,19 +130,18 @@ func (s *Server) handleConn(conn net.Conn) {
 		reply, err := s.executeCommand(conn, value)
 		if err != nil {
 			reply := protocol.ErrorString(fmt.Sprintf("ERR %s", err.Error()))
-			s.protocol.Encode(writer, reply)
+			s.Protocol.Encode(writer, reply)
 			writer.Flush()
 			continue
 		}
 
-		s.protocol.Encode(writer, reply)
+		s.Protocol.Encode(writer, reply)
 		writer.Flush()
 		continue
 	}
 }
 
 func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (protocol.RESPValue, error) {
-	// RESPValue as protocol.Array ([]RESPValue)
 	arr, ok := request.(protocol.Array)
 	if !ok {
 		return protocol.ErrorString("ERR expected array"), fmt.Errorf("expected array, got %T", request)
@@ -154,19 +153,8 @@ func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (prot
 		return "", nil
 	}
 
-	parts := make([]string, len(rawParts))
-	for i, part := range rawParts {
-		switch v := part.(type) {
-		case protocol.BulkString:
-			parts[i] = string(v)
-		case protocol.SimpleString:
-			parts[i] = string(v)
-		case string:
-			parts[i] = v
-		default:
-			return protocol.ErrorString("ERR invalid argument type"), fmt.Errorf("invalid argument type: %T", v)
-		}
-	}
+	parts := convertArrayToStrings(rawParts)
+
 	fmt.Println("Executing command:", parts[0])
 
 	// //check authentication
@@ -186,7 +174,7 @@ func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (prot
 			s.mu.Lock()
 			s.authenticatedConnections[conn] = true
 			s.mu.Unlock()
-			return "OK", nil
+			return protocol.SimpleString("OK"), nil
 		} else {
 			return protocol.ErrorString("ERR invalid password"), nil
 		}
@@ -194,10 +182,9 @@ func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (prot
 	case "SET":
 		if len(parts) != 3 {
 			return protocol.ErrorString("ERR wrong number of arguments for 'SET' command"), nil
-
 		}
 		s.store.Set(dbIndex, parts[1], parts[2])
-		return "OK", nil
+		return protocol.SimpleString("OK"), nil
 
 	case "GET":
 		if len(parts) != 2 {
@@ -205,17 +192,20 @@ func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (prot
 		}
 		value, ok := s.store.Get(dbIndex, parts[1])
 		if !ok {
-			return "NULL", nil
-		} else {
-			return value, nil
+			return s.Protocol.EncodeNil(), nil
 		}
+		r, err := convertValueTypeToRESPType(value)
+		if err != nil {
+			return protocol.ErrorString("ERR " + err.Error()), nil
+		}
+		return r, nil
 
 	case "DEL":
 		if len(parts) != 2 {
 			return protocol.ErrorString("ERR wrong number of arguments for 'DEL' command"), nil
 		}
 		s.store.Del(dbIndex, parts[1])
-		return "OK", nil
+		return protocol.SimpleString("OK"), nil
 
 	case "EXISTS":
 		if len(parts) != 2 {
@@ -419,7 +409,7 @@ func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (prot
 		return s.Info(), nil
 
 	case "PING":
-		return protocol.SimpleString(s.Ping()), nil
+		return s.Ping(), nil
 
 	case "ECHO":
 		if len(parts) < 2 {
@@ -429,7 +419,7 @@ func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (prot
 		for i := 1; i < len(parts); i++ {
 			strs[i-1] = fmt.Sprintf("%v", parts[i])
 		}
-		return protocol.SimpleString(s.Echo(strings.Join(strs, " "))), nil
+		return s.Echo(strings.Join(strs, " ")), nil
 
 	case "QUIT":
 		s.Quit(conn)
@@ -498,4 +488,38 @@ func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (prot
 		return protocol.ErrorString("ERR unknown command '" + parts[0] + "'"), nil
 	}
 	return nil, nil
+}
+
+func convertArrayToStrings(rawParts protocol.Array) []string {
+	parts := make([]string, len(rawParts))
+	for i, part := range rawParts {
+		switch v := part.(type) {
+		case protocol.BulkString:
+			parts[i] = string(v)
+		case protocol.SimpleString:
+			parts[i] = string(v)
+		case string:
+			parts[i] = v
+		default:
+			return nil
+		}
+	}
+	return parts
+}
+
+func convertValueTypeToRESPType(val interface{}) (protocol.RESPValue, error) {
+	value := val.(store.Value)
+	switch value.Type {
+	case store.TypeString:
+		return protocol.SimpleString(value.Data.(string)), nil
+	case store.TypeList:
+		list := value.Data.([]any)
+		respArray := protocol.Array{}
+		for _, v := range list {
+			respArray = append(respArray, protocol.SimpleString(fmt.Sprintf("%v", v)))
+		}
+		return respArray, nil
+	default:
+		return protocol.ErrorString("ERR unknown type"), nil
+	}
 }

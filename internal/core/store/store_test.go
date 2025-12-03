@@ -16,8 +16,9 @@ func TestStore(t *testing.T) {
 	if !ok {
 		t.Fatalf("Failed to get key")
 	}
-	if value != "Value1" {
-		t.Fatalf("Expected Value1, got %s", value)
+	valStr := value.(Value).Data.(string)
+	if valStr != "Value1" {
+		t.Fatalf("Expected Value1, got %s", valStr)
 	}
 
 	s.Del(0, "Key1")
@@ -51,8 +52,9 @@ func TestSetNX(t *testing.T) {
 		t.Fatalf("Expected SETNX to fail for Key1")
 	}
 	value, ok := s.Get(0, "Key1")
-	if !ok || value != "Value1" {
-		t.Fatalf("Expected Value1, got %s", value)
+	valStr := value.(Value).Data.(string)
+	if !ok || valStr != "Value1" {
+		t.Fatalf("Expected Value1 for Key1, got %s", valStr)
 	}
 }
 
@@ -379,21 +381,27 @@ func TestRename(t *testing.T) {
 	aofChan := make(chan string, 100)
 	s := NewStore(aofChan)
 
-	// test if Rename returns error when key does not exist
-	t.Log("test if Rename returns error when key does not exist")
+	// test if Rename returns nil when key does not exist
 	s.Rename(0, "key1", "key2")
-	_, ok := s.Get(0, "key2")
+	value, ok := s.Get(0, "key2")
 	if ok {
 		t.Fatalf("Expected ok equal false, got %v", ok)
+	}
+	if value != nil {
+		t.Fatalf("Expected nil, got %s", value)
 	}
 
 	// test if Rename does not rename when key exists
 	t.Log("test if Rename does not rename when key exists")
 	s.Set(0, "key1", "value1")
 	s.Rename(0, "key1", "key2")
-	value, _ := s.Get(0, "key2")
-	if value != "value1" {
-		t.Fatalf("Expected value1, got %s", value)
+	value, ok = s.Get(0, "key2")
+	if !ok {
+		t.Fatalf("Expected ok equal true, got %v", ok)
+	}
+	valStr := value.(Value).Data.(string)
+	if valStr != "value1" {
+		t.Fatalf("Expected value1, got %s", valStr)
 	}
 	s.Del(0, "key1")
 	s.Del(0, "key2")
@@ -403,9 +411,13 @@ func TestRename(t *testing.T) {
 	s.Set(0, "key1", "value1")
 	s.Set(0, "key2", "value2")
 	s.Rename(0, "key1", "key2")
-	value, _ = s.Get(0, "key2")
-	if value != "value1" {
-		t.Fatalf("Expected value1, got %s", value)
+	value, ok = s.Get(0, "key2")
+	if !ok {
+		t.Fatalf("Expected ok equal true, got %v", ok)
+	}
+	valStr = value.(Value).Data.(string)
+	if valStr != "value1" {
+		t.Fatalf("Expected value1, got %s", valStr)
 	}
 }
 
@@ -448,10 +460,10 @@ func TestType(t *testing.T) {
 		t.Fail()
 	}
 
-	// test if an integer is none
+	// test if an integer is string
 	itype := s.Type(dbIndex, "myInt")
-	if itype != "none" {
-		t.Logf("expected 'none', got '%s'", itype)
+	if itype != "string" {
+		t.Logf("expected 'string', got '%s'", itype)
 		t.Fail()
 	}
 }

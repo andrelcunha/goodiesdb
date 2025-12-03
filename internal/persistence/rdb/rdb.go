@@ -3,14 +3,13 @@ package rdb
 import (
 	"encoding/gob"
 	"os"
-	"time"
 
 	"github.com/andrelcunha/goodiesdb/internal/core/store"
 )
 
 // SaveSnapshot saves the current state of the store to a file
 func SaveSnapshot(s *store.Store, filename string) error {
-	data, expires := s.GetSnapshot()
+	data := s.GetSnapshot()
 
 	file, err := os.Create(filename)
 	if err != nil {
@@ -22,11 +21,9 @@ func SaveSnapshot(s *store.Store, filename string) error {
 
 	// Create a struct to hold both data and expires for encoding
 	snapshot := struct {
-		Data    []map[string]interface{}
-		Expires []map[string]time.Time
+		Data []map[string]store.Value
 	}{
-		Data:    data,
-		Expires: expires,
+		Data: data,
 	}
 
 	return encoder.Encode(snapshot)
@@ -44,8 +41,7 @@ func LoadSnapshot(s *store.Store, filename string) error {
 
 	// Create a struct to decode into
 	var snapshot struct {
-		Data    []map[string]interface{}
-		Expires []map[string]time.Time
+		Data []map[string]store.Value
 	}
 
 	err = decoder.Decode(&snapshot)
@@ -53,6 +49,6 @@ func LoadSnapshot(s *store.Store, filename string) error {
 		return err
 	}
 
-	s.RestoreFromSnapshot(snapshot.Data, snapshot.Expires)
+	s.RestoreFromSnapshot(snapshot.Data)
 	return nil
 }

@@ -37,15 +37,19 @@ func TestSaveLoadSnapshot(t *testing.T) {
 	}
 
 	// Verify Key1 exists before it expires
-	value, ok := newStore.Get(dbIndex, "Key1")
-	if !ok || value != "Value1" {
-		t.Fatalf("Expected Value1, got %s", value)
+	valInterface, ok := newStore.Get(dbIndex, "Key1")
+	value := valInterface.(store.Value)
+	valStr := value.Data.(string)
+	if !ok || valStr != "Value1" {
+		t.Fatalf("Expected Value1, got %s", valStr)
 	}
 
 	// Verify Key2 exists before it expires
-	value, ok = newStore.Get(dbIndex, "Key2")
-	if !ok || value != "Value2" {
-		t.Fatalf("Expected Value2, got %s", value)
+	valInterface, ok = newStore.Get(dbIndex, "Key2")
+	value = valInterface.(store.Value)
+	valStr = value.Data.(string)
+	if !ok || valStr != "Value2" {
+		t.Fatalf("Expected Value2, got %s", valStr)
 	}
 
 	// Wait for the key to expire

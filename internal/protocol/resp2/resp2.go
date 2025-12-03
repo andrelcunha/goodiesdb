@@ -52,3 +52,7 @@ func (r2 *RESP2Protocol) Encode(writer *bufio.Writer, value protocol.RESPValue) 
 func (r2 *RESP2Protocol) Version() string {
 	return "RESP2"
 }
+
+func (r2 *RESP2Protocol) EncodeNil() protocol.RESPValue {
+	return protocol.BulkString(nil)
+}

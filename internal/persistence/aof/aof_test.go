@@ -63,9 +63,12 @@ func TestRebuildStoreFromAOF(t *testing.T) {
 	// set new aofFilename
 
 	// Verify Key2 has been renamed to RenamedKey
-	value, ok := newStore.Get(dbIndex, "RenamedKey")
-	if !ok || value != "Value2" {
-		t.Errorf("Expected Value2 for RenamedKey, got %s", value)
+	valInterface, ok := newStore.Get(dbIndex, "RenamedKey")
+	value := valInterface.(store.Value)
+	valStr := value.Data.(string)
+
+	if !ok || valStr != "Value2" {
+		t.Errorf("Expected Value2 for RenamedKey, got %s", valStr)
 		t.Fail()
 	}
 
@@ -103,9 +106,12 @@ func TestAofRename(t *testing.T) {
 	s.Set(dbIndex, "Key1", "value1")
 
 	aofRename(parts, s, dbIndex)
-	value, ok := s.Get(dbIndex, "newName")
-	if !ok || value != "value1" {
-		t.Fatalf("Expeted 'value1, got %s", value)
+	valInterface, ok := s.Get(dbIndex, "newName")
+	value := valInterface.(store.Value)
+	valStr := value.Data.(string)
+
+	if !ok || valStr != "value1" {
+		t.Fatalf("Expeted 'value1, got %s", valStr)
 	}
 }
 
