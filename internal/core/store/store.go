@@ -153,6 +153,39 @@ func (s *Store) Get(dbIndex int, key string) (interface{}, bool) {
 	return value, ok
 }
 
+// GetRange gets a substring of the string value for a key
+func (s *Store) GetRange(dbIndex int, key string, start, end int) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	value, ok := s.data[dbIndex][key]
+	if !ok {
+		return "", ErrNoSuchKey
+	}
+	if value.IsExpired() {
+		return "", ErrNoSuchKey
+	}
+	strValue, ok := value.Data.(string)
+	if !ok {
+		return "", fmt.Errorf("value is not a string")
+	}
+	if start < 0 {
+		start = len(strValue) + start
+	}
+	if end < 0 {
+		end = len(strValue) + end
+	}
+	if start < 0 {
+		start = 0
+	}
+	if end >= len(strValue) {
+		end = len(strValue) - 1
+	}
+	if start > end {
+		return "", nil
+	}
+	return strValue[start : end+1], nil
+}
+
 func (s *Store) Del(dbIndex int, key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -184,7 +184,7 @@ func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (prot
 		}
 		value, ok := s.store.Get(dbIndex, parts[1])
 		if !ok {
-			return protocol.BulkString(nil), nil // Null bulk string
+			return s.Protocol.EncodeNil(), nil
 		}
 		// Convert to RESP type
 		r, err := convertValueTypeToRESPType(value)
@@ -313,7 +313,7 @@ func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (prot
 		}
 		// FIX: Convert to RESP type and return
 		if value == nil {
-			return protocol.BulkString(nil), nil
+			return s.Protocol.EncodeNil(), nil
 		}
 		return anyToRESP(value), nil
 
@@ -334,7 +334,7 @@ func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (prot
 			return protocol.ErrorString("ERR " + err.Error()), nil
 		}
 		if value == nil {
-			return protocol.BulkString(nil), nil
+			return s.Protocol.EncodeNil(), nil
 		}
 		return anyToRESP(value), nil
 
@@ -476,6 +476,22 @@ func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (prot
 			protocol.Array(keysArray),
 		}
 		return result, nil
+
+	case "GETRANGE":
+		fmt.Println("executing GETRANGE")
+		if len(parts) != 4 {
+			return protocol.ErrorString("ERR wrong number of arguments for 'GETRANGE' command"), nil
+		}
+		start, err1 := strconv.Atoi(parts[2])
+		end, err2 := strconv.Atoi(parts[3])
+		if err1 != nil || err2 != nil {
+			return protocol.ErrorString("ERR value is not an integer or out of range"), nil
+		}
+		value, err := s.store.GetRange(dbIndex, parts[1], start, end)
+		if err != nil {
+			return protocol.ErrorString("ERR " + err.Error()), nil
+		}
+		return protocol.BulkString([]byte(value)), nil
 
 	default:
 		return protocol.ErrorString("ERR unknown command '" + parts[0] + "'"), nil
