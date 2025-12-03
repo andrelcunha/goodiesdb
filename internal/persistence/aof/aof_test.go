@@ -88,7 +88,7 @@ func TestRebuildStoreFromAOF(t *testing.T) {
 	time.Sleep(4 * time.Second)
 
 	// Verify Key1 exists after it expires
-	if newStore.Exists(dbIndex, "Key1") {
+	if newStore.Exists(dbIndex, "Key1") > 0 {
 		t.Errorf("Expected Key1 to be expired after waiting more than 3 seconds")
 		t.Fail()
 	}

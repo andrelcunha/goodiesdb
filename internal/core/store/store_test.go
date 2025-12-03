@@ -33,10 +33,10 @@ func TestExists(t *testing.T) {
 
 	s := NewStore(aofChan)
 	s.Set(0, "Key1", "Value1")
-	if !s.Exists(0, "Key1") {
+	if s.Exists(0, "Key1") == 0 {
 		t.Fatalf("Expected Key1 to exist")
 	}
-	if s.Exists(0, "Key2") {
+	if s.Exists(0, "Key2") > 0 {
 		t.Fatalf("Expected Key2 to not exist")
 	}
 }
@@ -45,10 +45,10 @@ func TestSetNX(t *testing.T) {
 	aofChan := make(chan string, 100)
 
 	s := NewStore(aofChan)
-	if !s.SetNX(0, "Key1", "Value1") {
+	if s.SetNX(0, "Key1", "Value1") == 0 {
 		t.Fatalf("Expected SETNX to succeed for Key1")
 	}
-	if s.SetNX(0, "Key1", "Value2") {
+	if s.SetNX(0, "Key1", "Value2") > 0 {
 		t.Fatalf("Expected SETNX to fail for Key1")
 	}
 	value, ok := s.Get(0, "Key1")
@@ -68,7 +68,7 @@ func TestExpire(t *testing.T) {
 	}
 
 	time.Sleep(2 * time.Second)
-	if s.Exists(0, "Key1") {
+	if s.Exists(0, "Key1") > 0 {
 		t.Fatalf("Expected Key1 to be expired")
 	}
 }

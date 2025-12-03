@@ -155,7 +155,7 @@ func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (prot
 
 	parts := convertArrayToStrings(rawParts)
 
-	fmt.Println("Executing command:", parts[0])
+	fmt.Printf("Executing command: %s %v\n", parts[0], parts[1:])
 
 	// //check authentication
 	// if !s.isAuthenticates(conn) && strings.ToUpper(parts[0]) != "AUTH" {
@@ -211,22 +211,14 @@ func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (prot
 		if len(parts) != 2 {
 			return protocol.ErrorString("ERR wrong number of arguments for 'EXISTS' command"), nil
 		}
-		exists := s.store.Exists(dbIndex, parts[1])
-		if exists {
-			return "1", nil
-		} else {
-			return "0", nil
-		}
+		count := s.store.Exists(dbIndex, parts[1:]...)
+		return protocol.Integer(count), nil
 
 	case "SETNX":
 		if len(parts) != 3 {
 			return protocol.ErrorString("ERR wrong number of arguments for 'SETNX' command"), nil
 		}
-		if s.store.SetNX(dbIndex, parts[1], parts[2]) {
-			return "1", nil
-		} else {
-			return "0", nil
-		}
+		return protocol.Integer(s.store.SetNX(dbIndex, parts[1], parts[2])), nil
 
 	case "EXPIRE":
 		if len(parts) != 3 {

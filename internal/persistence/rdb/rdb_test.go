@@ -56,7 +56,7 @@ func TestSaveLoadSnapshot(t *testing.T) {
 	time.Sleep(4 * time.Second)
 
 	// Verify Key1 exists after it expires
-	if newStore.Exists(dbIndex, "Key1") {
+	if newStore.Exists(dbIndex, "Key1") > 0 {
 		t.Fatalf("Expected Key1 to be expered after snapshot load an waiting more than 3 seconds")
 	}
 

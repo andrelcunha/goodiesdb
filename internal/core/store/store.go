@@ -113,7 +113,7 @@ func (s *Store) AOFChannel() chan string {
 
 // Set sets the value for a key
 // Consider ret
-func (s *Store) Set(dbIndex int, key string, rawValue any) {
+func (s *Store) Set(dbIndex int, key string, rawValue any) bool {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -136,6 +136,7 @@ func (s *Store) Set(dbIndex int, key string, rawValue any) {
 		value = NewStringValue(fmt.Sprintf("%v", rawValue))
 	}
 	s.data[dbIndex][key] = *value
+	return true
 }
 
 // Get gets the value for a key
@@ -160,21 +161,29 @@ func (s *Store) Del(dbIndex int, key string) {
 }
 
 // Exists checks if a key exists
-func (s *Store) Exists(dbIndex int, key string) bool {
+func (s *Store) Exists(dbIndex int, keys ...string) int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	count := 0
+	for _, key := range keys {
+		value, ok := s.data[dbIndex][key]
+		if ok && !value.IsExpired() && value.Data != nil {
+			count++
+		}
+	}
 
-	value, ok := s.data[dbIndex][key]
-	return ok && !value.IsExpired()
+	return count
 }
 
 // SetNx sets the value for a key if the key does not exist
-func (s *Store) SetNX(dbIndex int, key, value string) bool {
-	if s.Exists(dbIndex, key) {
-		return false
+func (s *Store) SetNX(dbIndex int, key, value string) int {
+	if s.Exists(dbIndex, key) > 0 {
+		return 0
 	}
-	s.Set(dbIndex, key, value)
-	return true
+	if s.Set(dbIndex, key, value) {
+		return 1
+	}
+	return 0
 }
 
 // Expire sets the expiration time for a key
