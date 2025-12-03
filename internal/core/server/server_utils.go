@@ -29,38 +29,6 @@ func (s *Server) getCurrentDb(conn net.Conn) int {
 	return db
 }
 
-// availableCommands returns a list of available commands
-func (s *Server) availableCommands() []string {
-	return []string{
-		"AUTH",
-		"SET",
-		"GET",
-		"DEL",
-		"EXISTS",
-		"SETNX",
-		"EXPIRE",
-		"INCR",
-		"DECR",
-		"TTL",
-		"SELECT",
-		"LPUSH",
-		"RPUSH",
-		"LPOP",
-		"RPOP",
-		"LRANGE",
-		"LTRIM",
-		"RENAME",
-		"TYPE",
-		"KEYS",
-		"INFO",
-		"PING",
-		"ECHO",
-		"QUIT",
-		"FLUSHDB",
-		"FLUSHALL",
-	}
-}
-
 // Info returns server info
 func (s *Server) Info() protocol.BulkString {
 	s.mu.Lock()
@@ -72,6 +40,7 @@ func (s *Server) Info() protocol.BulkString {
 	b.WriteString(fmt.Sprintf("uptime_in_seconds:%d\n", 1000))
 	b.WriteString(fmt.Sprintf("connected_clients:%d\n", 0))
 	bytArr := []byte(b.String())
+	fmt.Println("Sending info: ", b.String())
 	return protocol.BulkString(bytArr)
 }
 

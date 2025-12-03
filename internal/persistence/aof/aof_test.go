@@ -72,7 +72,11 @@ func TestRebuildStoreFromAOF(t *testing.T) {
 	// Verify List1 contents
 	list, _ := newStore.LRange(dbIndex, "List1", 0, -1)
 	expectedList := []string{"Value1"}
-	if !slice.Equal(list, expectedList) {
+	listStr := make([]string, len(list))
+	for i, v := range list {
+		listStr[i] = v.(string)
+	}
+	if !slice.Equal(listStr, expectedList) {
 		t.Errorf("Expected %v, got %v", expectedList, list)
 		t.Fail()
 	}
@@ -113,8 +117,12 @@ func TestAofLTrim(t *testing.T) {
 	s.LPush(dbIndex, "List1", "Value1", "Value2", "Value3")
 	aofLTrim(parts, s, dbIndex)
 	list, _ := s.LRange(dbIndex, "List1", 0, -1)
-	expectedList := []string{"Value2, Value1"}
-	if slice.Equal(list, expectedList) {
+	expectedList := []string{"Value2", "Value1"}
+	listStr := make([]string, len(list))
+	for i, v := range list {
+		listStr[i] = v.(string)
+	}
+	if !slice.Equal(listStr, expectedList) {
 		t.Logf("Expected %v, got %v", expectedList, list)
 		t.Fail()
 	}

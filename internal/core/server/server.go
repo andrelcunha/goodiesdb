@@ -416,7 +416,6 @@ func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (prot
 		return keys, nil
 
 	case "INFO":
-		fmt.Println("Sending info")
 		return s.Info(), nil
 
 	case "PING":
@@ -442,6 +441,58 @@ func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (prot
 	case "FLUSHALL":
 		s.store.FlushAll()
 		fmt.Fprintln(conn, "OK")
+
+	case "SCAN":
+		if len(parts) < 2 {
+			return protocol.ErrorString("ERR wrong number of arguments for 'SCAN' command"), nil
+		}
+		cursor, err := strconv.Atoi(parts[1])
+		if err != nil {
+			return protocol.ErrorString("ERR invalid cursor"), nil
+		}
+
+		pattern := "*"
+		count := 10
+
+		for i := 2; i < len(parts); i++ {
+			switch strings.ToUpper(parts[i]) {
+			case "MATCH":
+				if i+1 >= len(parts) {
+					return protocol.ErrorString("ERR syntax error"), nil
+				}
+				pattern = parts[i+1]
+				i++
+			case "COUNT":
+				if i+1 >= len(parts) {
+					return protocol.ErrorString("ERR syntax error"), nil
+				}
+				c, err := strconv.Atoi(parts[i+1])
+				if err != nil || c <= 0 {
+					return protocol.ErrorString("ERR invalid count"), nil
+				}
+				count = c
+				i++
+			default:
+				return protocol.ErrorString("ERR syntax error"), nil
+			}
+		}
+
+		newCursor, keys, err := s.store.Scan(dbIndex, cursor, pattern, count)
+		if err != nil {
+			return protocol.ErrorString("ERR " + err.Error()), nil
+		}
+
+		result := protocol.Array{
+			protocol.BulkString(strconv.Itoa(newCursor)),
+			protocol.Array(func() []protocol.RESPValue {
+				arr := make([]protocol.RESPValue, len(keys))
+				for i, k := range keys {
+					arr[i] = protocol.BulkString(k)
+				}
+				return arr
+			}()),
+		}
+		return result, nil
 
 	default:
 		return protocol.ErrorString("ERR unknown command '" + parts[0] + "'"), nil

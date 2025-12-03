@@ -79,20 +79,20 @@ func (s *Store) GetListLength(dbIndex int, key string) int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if list, ok := s.data[dbIndex][key].([]string); ok {
+	if list, ok := s.data[dbIndex][key].([]any); ok {
 		return len(list)
 	}
 	return 0
 }
 
 // GetList returns a copy of the list for testing
-func (s *Store) GetList(dbIndex int, key string) []string {
+func (s *Store) GetList(dbIndex int, key string) []any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if list, ok := s.data[dbIndex][key].([]string); ok {
+	if list, ok := s.data[dbIndex][key].([]any); ok {
 		// Return a copy to avoid data races
-		result := make([]string, len(list))
+		result := make([]any, len(list))
 		copy(result, list)
 		return result
 	}
@@ -289,7 +289,7 @@ func (s *Store) LPop(dbIndex int, key string, pcount *int) (interface{}, error) 
 		return nil, fmt.Errorf("value is out of range, must be positive")
 	}
 
-	list, ok := s.data[dbIndex][key].([]string)
+	list, ok := s.data[dbIndex][key].([]any)
 	if !ok {
 		return nil, nil
 	}
@@ -313,7 +313,6 @@ func (s *Store) LPop(dbIndex int, key string, pcount *int) (interface{}, error) 
 	} else {
 		return popped, nil
 	}
-
 }
 
 // RPop removes and returns the last N elements of the list, where N is equal to count, or nil if the list is empty.
@@ -336,7 +335,7 @@ func (s *Store) RPop(dbIndex int, key string, pcount *int) (interface{}, error) 
 	if count < 0 && pcount != nil {
 		return nil, fmt.Errorf("value is out of range, must be positive")
 	} else {
-		list, ok := s.data[dbIndex][key].([]string)
+		list, ok := s.data[dbIndex][key].([]any)
 		if !ok {
 			return nil, nil
 		}
@@ -363,8 +362,8 @@ func (s *Store) RPop(dbIndex int, key string, pcount *int) (interface{}, error) 
 	}
 }
 
-// LRange returns the specified elements of the list
-func (s *Store) LRange(dbIndex int, key string, start, stop int) ([]string, error) {
+// LRange returns the elements of a list between start and stop
+func (s *Store) LRange(dbIndex int, key string, start, stop int) ([]any, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -373,7 +372,7 @@ func (s *Store) LRange(dbIndex int, key string, start, stop int) ([]string, erro
 		return nil, nil
 	}
 
-	list, ok := s.data[dbIndex][key].([]string)
+	list, ok := s.data[dbIndex][key].([]any)
 	if !ok {
 		return nil, nil
 	}
@@ -395,13 +394,13 @@ func (s *Store) LRange(dbIndex int, key string, start, stop int) ([]string, erro
 	}
 
 	if start > stop || start >= len || stop < 0 {
-		return []string{}, nil
+		return []any{}, nil
 	}
 
 	return list[start : stop+1], nil
 }
 
-// LTrim removes elements from a list
+// LTrim trims a list to the specified range
 func (s *Store) LTrim(dbIndex int, key string, start, stop int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -411,7 +410,7 @@ func (s *Store) LTrim(dbIndex int, key string, start, stop int) error {
 		return nil
 	}
 
-	list, ok := s.data[dbIndex][key].([]string)
+	list, ok := s.data[dbIndex][key].([]any)
 	if !ok {
 		return nil
 	}
@@ -470,17 +469,16 @@ func (s *Store) Rename(dbIndex int, key, newkey string) error {
 	return nil
 }
 
-// Tupe determine the type of value stored at a key
+// Type returns the type of the value stored at key
 func (s *Store) Type(dbIndex int, key string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	// verify if key exists
 	if val, exists := s.data[dbIndex][key]; exists {
 		switch val.(type) {
 		case string:
 			return "string"
-		case []string:
+		case []any:
 			return "list"
 			//add more types below
 		}
@@ -527,4 +525,55 @@ func (s *Store) FlushAll() string {
 	}
 	s.aofChan <- "FLUSHALL"
 	return "OK"
+}
+
+func (s *Store) Scan(dbIndex int, cursor int, pattern string, count int) (int, []string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	allKeys := make([]string, 0, len(s.data[dbIndex]))
+	for key := range s.data[dbIndex] {
+		if s.isExpired(dbIndex, key) {
+			continue
+		}
+		allKeys = append(allKeys, key)
+	}
+	if cursor < 0 || cursor >= len(allKeys) {
+		return 0, []string{}, nil
+	}
+	if count <= 0 {
+		count = 10 // default count
+	}
+
+	start := cursor
+	end := cursor + count
+	if end > len(allKeys) {
+		end = len(allKeys)
+	}
+	keySlice := allKeys[start:end]
+	var matchedKeys []string
+	if pattern != "" && pattern != "*" {
+		regexPattern := "^" + strings.ReplaceAll(strings.ReplaceAll(pattern, "?", "."), "*", ".*") + "$"
+		re, err := regexp.Compile(regexPattern)
+		if err != nil {
+			return 0, nil, err
+		}
+
+		for _, key := range keySlice {
+			if re.MatchString(key) {
+				matchedKeys = append(matchedKeys, key)
+			}
+		}
+	} else {
+		matchedKeys = keySlice
+	}
+
+	var nextCursor int
+	if end >= len(allKeys) {
+		nextCursor = 0
+	} else {
+		nextCursor = end
+	}
+
+	return nextCursor, matchedKeys, nil
 }
