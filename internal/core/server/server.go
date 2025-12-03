@@ -120,7 +120,7 @@ func (s *Server) handleConn(conn net.Conn) {
 			if err.Error() == "EOF" {
 				return
 			}
-			reply := protocol.ErrorString(fmt.Sprintf("parse error:", err))
+			reply := protocol.ErrorString(fmt.Sprintf("parse error: %v", err))
 			s.Protocol.Encode(writer, reply)
 			writer.Flush()
 			continue
