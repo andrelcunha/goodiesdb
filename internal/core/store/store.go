@@ -208,6 +208,24 @@ func (s *Store) Exists(dbIndex int, keys ...string) int {
 	return count
 }
 
+// StrLen returns the length of the string value for a key
+func (s *Store) StrLen(dbIndex int, key string) (int, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	value, ok := s.data[dbIndex][key]
+	if !ok {
+		return 0, ErrNoSuchKey
+	}
+	if value.IsExpired() {
+		return 0, ErrNoSuchKey
+	}
+	strValue, ok := value.Data.(string)
+	if !ok {
+		return 0, ErrWrongType
+	}
+	return len(strValue), nil
+}
+
 // SetNx sets the value for a key if the key does not exist
 func (s *Store) SetNX(dbIndex int, key, value string) int {
 	if s.Exists(dbIndex, key) > 0 {

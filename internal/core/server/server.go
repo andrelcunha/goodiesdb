@@ -493,6 +493,16 @@ func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (prot
 		}
 		return protocol.BulkString([]byte(value)), nil
 
+	case "STRLEN":
+		if len(parts) != 2 {
+			return protocol.ErrorString("ERR wrong number of arguments for 'STRLEN' command"), nil
+		}
+		length, err := s.store.StrLen(dbIndex, parts[1])
+		if err != nil {
+			return protocol.ErrorString("ERR " + err.Error()), nil
+		}
+		return protocol.Integer(int64(length)), nil
+
 	default:
 		return protocol.ErrorString("ERR unknown command '" + parts[0] + "'"), nil
 	}
