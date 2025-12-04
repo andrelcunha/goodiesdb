@@ -27,6 +27,8 @@ type Value struct {
 var ErrWrongType = fmt.Errorf("WRONGTYPE Operation against a key holding the wrong kind of value")
 var ErrNotInteger = fmt.Errorf("ERR value is not an integer or out of range")
 
+/* Constructors */
+
 func NewStringValue(val string) *Value {
 	return &Value{
 		Type: TypeString,
@@ -61,6 +63,8 @@ func NewZSetValue(val map[string]float64) *Value {
 		Data: val,
 	}
 }
+
+/* Getters */
 
 func (v *Value) AsString() (string, error) {
 	if v.Type != TypeString {
@@ -117,18 +121,9 @@ func (v *Value) AsZSet() (map[string]float64, error) {
 	return zset, nil
 }
 
-func (v *Value) IsExpired() bool {
-	if v.ExpiresAt == nil {
-		return false
-	}
-	return time.Now().After(*v.ExpiresAt)
-}
+/* RESP Conversion */
 
-func (v *Value) SetExpiration(ttl time.Duration) {
-	expiry := time.Now().Add(ttl)
-	v.ExpiresAt = &expiry
-}
-
+// ToRESP converts the Value to a RESPValue for protocol encoding
 func (v *Value) ToRESP() (protocol.RESPValue, error) {
 	switch v.Type {
 	case TypeString:
@@ -144,4 +139,25 @@ func (v *Value) ToRESP() (protocol.RESPValue, error) {
 	default:
 		return protocol.Null{}, nil
 	}
+}
+
+/* Expiration */
+
+func (v *Value) IsExpired() bool {
+	if v.ExpiresAt == nil {
+		return false
+	}
+	return time.Now().After(*v.ExpiresAt)
+}
+
+func (v *Value) SetExpiration(ttl time.Duration) {
+	expiry := time.Now().Add(ttl)
+	v.ExpiresAt = &expiry
+}
+
+func (v *Value) GetTTL() time.Duration {
+	if v.ExpiresAt == nil {
+		return -1
+	}
+	return time.Until(*v.ExpiresAt)
 }
