@@ -91,3 +91,17 @@ func parseSetOptions(args []string) (*SetOptions, error) {
 	}
 	return options, nil
 }
+
+// Get retrieves the value for a key
+func (s *Store) Get(dbIndex int, key string) (*Value, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	value, ok := s.data[dbIndex][key]
+	if !ok {
+		return nil, false
+	}
+	if value != nil && value.IsExpired() {
+		return nil, false
+	}
+	return value, ok
+}

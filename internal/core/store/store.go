@@ -111,20 +111,6 @@ func (s *Store) AOFChannel() chan string {
 	return s.aofChan
 }
 
-// Get gets the value for a key
-func (s *Store) Get(dbIndex int, key string) (*Value, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	value, ok := s.data[dbIndex][key]
-	if !ok {
-		return nil, false
-	}
-	if value != nil && value.IsExpired() {
-		return nil, false
-	}
-	return value, ok
-}
-
 // GetRange gets a substring of the string value for a key
 func (s *Store) GetRange(dbIndex int, key string, start, end int) (string, error) {
 	s.mu.RLock()
