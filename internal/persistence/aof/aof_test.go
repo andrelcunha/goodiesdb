@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"com.github.andrelcunha.goodiesdb/internal/core/store"
-	"com.github.andrelcunha.goodiesdb/internal/utils/slice"
+	"github.com/andrelcunha/goodiesdb/internal/core/store"
+	"github.com/andrelcunha/goodiesdb/internal/utils/slice"
 )
 
 func TestRebuildStoreFromAOF(t *testing.T) {
@@ -63,16 +63,23 @@ func TestRebuildStoreFromAOF(t *testing.T) {
 	// set new aofFilename
 
 	// Verify Key2 has been renamed to RenamedKey
-	value, ok := newStore.Get(dbIndex, "RenamedKey")
-	if !ok || value != "Value2" {
-		t.Errorf("Expected Value2 for RenamedKey, got %s", value)
+	valInterface, ok := newStore.Get(dbIndex, "RenamedKey")
+	value := valInterface.(store.Value)
+	valStr := value.Data.(string)
+
+	if !ok || valStr != "Value2" {
+		t.Errorf("Expected Value2 for RenamedKey, got %s", valStr)
 		t.Fail()
 	}
 
 	// Verify List1 contents
 	list, _ := newStore.LRange(dbIndex, "List1", 0, -1)
 	expectedList := []string{"Value1"}
-	if !slice.Equal(list, expectedList) {
+	listStr := make([]string, len(list))
+	for i, v := range list {
+		listStr[i] = v.(string)
+	}
+	if !slice.Equal(listStr, expectedList) {
 		t.Errorf("Expected %v, got %v", expectedList, list)
 		t.Fail()
 	}
@@ -81,7 +88,7 @@ func TestRebuildStoreFromAOF(t *testing.T) {
 	time.Sleep(4 * time.Second)
 
 	// Verify Key1 exists after it expires
-	if newStore.Exists(dbIndex, "Key1") {
+	if newStore.Exists(dbIndex, "Key1") > 0 {
 		t.Errorf("Expected Key1 to be expired after waiting more than 3 seconds")
 		t.Fail()
 	}
@@ -99,9 +106,12 @@ func TestAofRename(t *testing.T) {
 	s.Set(dbIndex, "Key1", "value1")
 
 	aofRename(parts, s, dbIndex)
-	value, ok := s.Get(dbIndex, "newName")
-	if !ok || value != "value1" {
-		t.Fatalf("Expeted 'value1, got %s", value)
+	valInterface, ok := s.Get(dbIndex, "newName")
+	value := valInterface.(store.Value)
+	valStr := value.Data.(string)
+
+	if !ok || valStr != "value1" {
+		t.Fatalf("Expeted 'value1, got %s", valStr)
 	}
 }
 
@@ -113,8 +123,12 @@ func TestAofLTrim(t *testing.T) {
 	s.LPush(dbIndex, "List1", "Value1", "Value2", "Value3")
 	aofLTrim(parts, s, dbIndex)
 	list, _ := s.LRange(dbIndex, "List1", 0, -1)
-	expectedList := []string{"Value2, Value1"}
-	if slice.Equal(list, expectedList) {
+	expectedList := []string{"Value2", "Value1"}
+	listStr := make([]string, len(list))
+	for i, v := range list {
+		listStr[i] = v.(string)
+	}
+	if !slice.Equal(listStr, expectedList) {
 		t.Logf("Expected %v, got %v", expectedList, list)
 		t.Fail()
 	}

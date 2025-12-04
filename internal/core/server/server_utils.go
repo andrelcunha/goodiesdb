@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"com.github.andrelcunha.goodiesdb/internal/persistence/aof"
-	"com.github.andrelcunha.goodiesdb/internal/persistence/rdb"
+	"github.com/andrelcunha/goodiesdb/internal/persistence/aof"
+	"github.com/andrelcunha/goodiesdb/internal/persistence/rdb"
 )
 
 func (s *Server) isAuthenticates(conn net.Conn) bool {
@@ -25,58 +25,6 @@ func (s *Server) getCurrentDb(conn net.Conn) int {
 		s.connectionDbs[conn] = db
 	}
 	return db
-}
-
-// availableCommands returns a list of available commands
-func (s *Server) availableCommands() []string {
-	return []string{
-		"AUTH",
-		"SET",
-		"GET",
-		"DEL",
-		"EXISTS",
-		"SETNX",
-		"EXPIRE",
-		"INCR",
-		"DECR",
-		"TTL",
-		"SELECT",
-		"LPUSH",
-		"RPUSH",
-		"LPOP",
-		"RPOP",
-		"LRANGE",
-		"LTRIM",
-		"RENAME",
-		"TYPE",
-		"KEYS",
-		"INFO",
-		"PING",
-		"ECHO",
-		"QUIT",
-		"FLUSHDB",
-		"FLUSHALL",
-	}
-}
-
-// Info returns server info
-func (s *Server) Info() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return fmt.Sprintf("Server info:\n\n"+
-		"Version: %s\n",
-		s.config.Version,
-	)
-}
-
-// Ping returns pong
-func (s *Server) Ping() string {
-	return "PONG"
-}
-
-// Echo returns the message
-func (s *Server) Echo(message string) string {
-	return message
 }
 
 // Quit closes the connection

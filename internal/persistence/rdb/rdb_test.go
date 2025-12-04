@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"com.github.andrelcunha.goodiesdb/internal/core/store"
-	"com.github.andrelcunha.goodiesdb/internal/persistence/aof"
+	"github.com/andrelcunha/goodiesdb/internal/core/store"
+	"github.com/andrelcunha/goodiesdb/internal/persistence/aof"
 )
 
 func TestSaveLoadSnapshot(t *testing.T) {
@@ -37,22 +37,26 @@ func TestSaveLoadSnapshot(t *testing.T) {
 	}
 
 	// Verify Key1 exists before it expires
-	value, ok := newStore.Get(dbIndex, "Key1")
-	if !ok || value != "Value1" {
-		t.Fatalf("Expected Value1, got %s", value)
+	valInterface, ok := newStore.Get(dbIndex, "Key1")
+	value := valInterface.(store.Value)
+	valStr := value.Data.(string)
+	if !ok || valStr != "Value1" {
+		t.Fatalf("Expected Value1, got %s", valStr)
 	}
 
 	// Verify Key2 exists before it expires
-	value, ok = newStore.Get(dbIndex, "Key2")
-	if !ok || value != "Value2" {
-		t.Fatalf("Expected Value2, got %s", value)
+	valInterface, ok = newStore.Get(dbIndex, "Key2")
+	value = valInterface.(store.Value)
+	valStr = value.Data.(string)
+	if !ok || valStr != "Value2" {
+		t.Fatalf("Expected Value2, got %s", valStr)
 	}
 
 	// Wait for the key to expire
 	time.Sleep(4 * time.Second)
 
 	// Verify Key1 exists after it expires
-	if newStore.Exists(dbIndex, "Key1") {
+	if newStore.Exists(dbIndex, "Key1") > 0 {
 		t.Fatalf("Expected Key1 to be expered after snapshot load an waiting more than 3 seconds")
 	}
 

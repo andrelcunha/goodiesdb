@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"com.github.andrelcunha.goodiesdb/internal/utils/slice"
+	"github.com/andrelcunha/goodiesdb/internal/utils/slice"
 )
 
 func TestStore(t *testing.T) {
@@ -16,8 +16,9 @@ func TestStore(t *testing.T) {
 	if !ok {
 		t.Fatalf("Failed to get key")
 	}
-	if value != "Value1" {
-		t.Fatalf("Expected Value1, got %s", value)
+	valStr := value.(Value).Data.(string)
+	if valStr != "Value1" {
+		t.Fatalf("Expected Value1, got %s", valStr)
 	}
 
 	s.Del(0, "Key1")
@@ -32,10 +33,10 @@ func TestExists(t *testing.T) {
 
 	s := NewStore(aofChan)
 	s.Set(0, "Key1", "Value1")
-	if !s.Exists(0, "Key1") {
+	if s.Exists(0, "Key1") == 0 {
 		t.Fatalf("Expected Key1 to exist")
 	}
-	if s.Exists(0, "Key2") {
+	if s.Exists(0, "Key2") > 0 {
 		t.Fatalf("Expected Key2 to not exist")
 	}
 }
@@ -44,15 +45,16 @@ func TestSetNX(t *testing.T) {
 	aofChan := make(chan string, 100)
 
 	s := NewStore(aofChan)
-	if !s.SetNX(0, "Key1", "Value1") {
+	if s.SetNX(0, "Key1", "Value1") == 0 {
 		t.Fatalf("Expected SETNX to succeed for Key1")
 	}
-	if s.SetNX(0, "Key1", "Value2") {
+	if s.SetNX(0, "Key1", "Value2") > 0 {
 		t.Fatalf("Expected SETNX to fail for Key1")
 	}
 	value, ok := s.Get(0, "Key1")
-	if !ok || value != "Value1" {
-		t.Fatalf("Expected Value1, got %s", value)
+	valStr := value.(Value).Data.(string)
+	if !ok || valStr != "Value1" {
+		t.Fatalf("Expected Value1 for Key1, got %s", valStr)
 	}
 }
 
@@ -66,7 +68,7 @@ func TestExpire(t *testing.T) {
 	}
 
 	time.Sleep(2 * time.Second)
-	if s.Exists(0, "Key1") {
+	if s.Exists(0, "Key1") > 0 {
 		t.Fatalf("Expected Key1 to be expired")
 	}
 }
@@ -187,8 +189,12 @@ func TestLPush(t *testing.T) {
 	//test if the list contents are correct
 	list := s.GetList(0, "list")
 	expected := []string{"value3", "value2", "value1"}
-	if !slice.Equal(list, expected) {
-		t.Fatalf("Expected list to be [value3 value2 value1], got %v", list)
+	listStr := make([]string, len(list))
+	for i, v := range list {
+		listStr[i] = v.(string)
+	}
+	if !slice.Equal(listStr, expected) {
+		t.Fatalf("Expected list to be [value3 value2 value1], got %v", listStr)
 	}
 }
 
@@ -222,7 +228,7 @@ func TestLPop(t *testing.T) {
 	s := NewStore(aofChan)
 
 	//test if LPop returns nil when key does not exist
-	t.Log("test if LPOP returns nil when key does not exist")
+	// t.Log("test if LPOP returns nil when key does not exist")
 	value, _ := s.LPop(0, "list", nil)
 	if value != nil {
 		t.Fatalf("Expected got nil, got %s", value)
@@ -231,7 +237,6 @@ func TestLPop(t *testing.T) {
 	s.LPush(0, "list", "value1", "value2", "value3")
 
 	//test if LPOP returns error when called with count argument smaller than 0
-	t.Log("test if LPOP returns error when called with count argument smaller than 0")
 	count := -1
 	_, err := s.LPop(0, "list", &count)
 	if err == nil {
@@ -239,31 +244,32 @@ func TestLPop(t *testing.T) {
 	}
 
 	//test if LPOP returns empty list when called with count = 0
-	t.Log("test if LPOP returns empty list when called with count = 0")
 	count = 0
 	value, err = s.LPop(0, "list", &count)
-	if (err != nil) || len(value.([]string)) != 0 {
-		t.Fatalf("Expected [] (empty list), got %s, value length is %d ", value, len(value.([]string)))
+	if (err != nil) || len(value.([]any)) != 0 {
+		t.Fatalf("Expected [] (empty list), got %s, value length is %d ", value, len(value.([]any)))
 	}
 
 	// test if LPOP returns the first element as string when called with count = nil
-	t.Log("test if LPOP returns the first element as string when called with count = nil")
 	value, err = s.LPop(0, "list", nil)
 	if (err != nil) || value.(string) != "value3" {
 		t.Fatalf("Expected value1, got %s", value)
 	}
 
 	//test if LPop returns the list when called with count argument greater than list length
-	t.Log("test if LPOP returns the list when called with count argument greater than list length")
 	count = 3
 	value, err = s.LPop(0, "list", &count)
 	expected := []string{"value2", "value1"}
-	if (err != nil) || !slice.Equal(value.([]string), expected) {
+	listStr := make([]string, len(value.([]any)))
+	for i, v := range value.([]any) {
+		listStr[i] = v.(string)
+	}
+	if (err != nil) || !slice.Equal(listStr, expected) {
 		t.Fatalf("Expected [value2 value1], got %v", value)
 	}
 
 	//test if LPOP returns nil when the list is empty
-	t.Log("test if LPOP returns nil when the list is empty")
+	// t.Log("test if LPOP returns nil when the list is empty")
 	value, _ = s.LPop(0, "list", &count)
 	if value != nil {
 		t.Fatalf("Expected nil, got %v", value)
@@ -276,7 +282,6 @@ func TestRPop(t *testing.T) {
 	s := NewStore(aofChan)
 
 	//test if RPop returns nil when key does not exist
-	t.Log("test if RPop returns nil when key does not exist")
 	value, _ := s.RPop(0, "list", nil)
 	if value != nil {
 		t.Fatalf("Expected got nil, got %s", value)
@@ -285,7 +290,6 @@ func TestRPop(t *testing.T) {
 	s.LPush(0, "list", "value1", "value2", "value3")
 
 	//test if RPop returns error when called with count argument smaller than 0
-	t.Log("test if RPop returns error when called with count argument smaller than 0")
 	count := -1
 	_, err := s.RPop(0, "list", &count)
 	if err == nil {
@@ -293,11 +297,14 @@ func TestRPop(t *testing.T) {
 	}
 
 	//test if RPop returns empty list when called with count = 0
-	t.Log("test if RPop returns empty list when called with count = 0")
 	count = 0
-	value, err = s.RPop(0, "list", &count)
-	if (err != nil) || len(value.([]string)) != 0 {
-		t.Fatalf("Expected [] (empty list), got %s, value length is %d ", value, len(value.([]string)))
+	list, err := s.RPop(0, "list", &count)
+	listStr := make([]string, len(list.([]any)))
+	for i, v := range list.([]any) {
+		listStr[i] = v.(string)
+	}
+	if (err != nil) || len(listStr) != 0 {
+		t.Fatalf("Expected [] (empty list), got %s, value length is %d ", list, len(listStr))
 	}
 	s.Del(0, "list")
 
@@ -312,10 +319,15 @@ func TestRPop(t *testing.T) {
 	//test if RPop returns the list when called with count argument greater than list length
 	t.Log("test if RPop returns the list when called with count argument greater than list length")
 	count = 3
-	value, err = s.RPop(0, "list", &count)
+	list, err = s.RPop(0, "list", &count)
+	listStr = make([]string, len(list.([]any)))
+	for i, v := range list.([]any) {
+		listStr[i] = v.(string)
+	}
+
 	expected := []string{"value3", "value2"}
-	if (err != nil) || !slice.Equal(value.([]string), expected) {
-		t.Fatalf("Expected [value3 value2], got %v", value)
+	if (err != nil) || !slice.Equal(listStr, expected) {
+		t.Fatalf("Expected [value3 value2], got %v", listStr)
 	}
 
 	//test if RPop returns nil when the list is empty
@@ -340,8 +352,12 @@ func TestLRange(t *testing.T) {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 	expected := []string{"value4", "value3", "value2", "value1"}
-	if !slice.Equal(list, expected) {
-		t.Fatalf("Expected %v, got %v", expected, list)
+	listStr := make([]string, len(list))
+	for i, v := range list {
+		listStr[i] = v.(string)
+	}
+	if !slice.Equal(listStr, expected) {
+		t.Fatalf("Expected %v, got %v", expected, listStr)
 	}
 
 	// Test partial range
@@ -351,8 +367,12 @@ func TestLRange(t *testing.T) {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 	expected = []string{"value3", "value2"}
-	if !slice.Equal(list, expected) {
-		t.Fatalf("Expected %v, got %v", expected, list)
+	listStr = make([]string, len(list))
+	for i, v := range list {
+		listStr[i] = v.(string)
+	}
+	if !slice.Equal(listStr, expected) {
+		t.Fatalf("Expected %v, got %v", expected, listStr)
 	}
 }
 
@@ -361,21 +381,27 @@ func TestRename(t *testing.T) {
 	aofChan := make(chan string, 100)
 	s := NewStore(aofChan)
 
-	// test if Rename returns error when key does not exist
-	t.Log("test if Rename returns error when key does not exist")
+	// test if Rename returns nil when key does not exist
 	s.Rename(0, "key1", "key2")
-	_, ok := s.Get(0, "key2")
+	value, ok := s.Get(0, "key2")
 	if ok {
 		t.Fatalf("Expected ok equal false, got %v", ok)
+	}
+	if value != nil {
+		t.Fatalf("Expected nil, got %s", value)
 	}
 
 	// test if Rename does not rename when key exists
 	t.Log("test if Rename does not rename when key exists")
 	s.Set(0, "key1", "value1")
 	s.Rename(0, "key1", "key2")
-	value, _ := s.Get(0, "key2")
-	if value != "value1" {
-		t.Fatalf("Expected value1, got %s", value)
+	value, ok = s.Get(0, "key2")
+	if !ok {
+		t.Fatalf("Expected ok equal true, got %v", ok)
+	}
+	valStr := value.(Value).Data.(string)
+	if valStr != "value1" {
+		t.Fatalf("Expected value1, got %s", valStr)
 	}
 	s.Del(0, "key1")
 	s.Del(0, "key2")
@@ -385,9 +411,13 @@ func TestRename(t *testing.T) {
 	s.Set(0, "key1", "value1")
 	s.Set(0, "key2", "value2")
 	s.Rename(0, "key1", "key2")
-	value, _ = s.Get(0, "key2")
-	if value != "value1" {
-		t.Fatalf("Expected value1, got %s", value)
+	value, ok = s.Get(0, "key2")
+	if !ok {
+		t.Fatalf("Expected ok equal true, got %v", ok)
+	}
+	valStr = value.(Value).Data.(string)
+	if valStr != "value1" {
+		t.Fatalf("Expected value1, got %s", valStr)
 	}
 }
 
@@ -400,7 +430,11 @@ func TestType(t *testing.T) {
 	// Arrange
 	s.Set(dbIndex, "myString", "value1")
 	myList := []string{"one", "two", "three"}
-	s.RPush(dbIndex, "myList", myList...)
+	mySlice := make([]any, len(myList))
+	for i, v := range myList {
+		mySlice[i] = v
+	}
+	s.RPush(dbIndex, "myList", mySlice...)
 
 	// int
 	s.SetRawValue(dbIndex, "myInt", 123)
@@ -426,10 +460,10 @@ func TestType(t *testing.T) {
 		t.Fail()
 	}
 
-	// test if an integer is none
+	// test if an integer is string
 	itype := s.Type(dbIndex, "myInt")
-	if itype != "none" {
-		t.Logf("expected 'none', got '%s'", itype)
+	if itype != "string" {
+		t.Logf("expected 'string', got '%s'", itype)
 		t.Fail()
 	}
 }
@@ -443,7 +477,11 @@ func TestKeys(t *testing.T) {
 	s.Set(indexDb, "key1", "value1")
 	s.Set(indexDb, "key2", "value2")
 	list1 := []string{"one", "two", "tree"}
-	s.RPush(indexDb, "list1", list1...)
+	mySlice := make([]any, len(list1))
+	for i, v := range list1 {
+		mySlice[i] = v
+	}
+	s.RPush(indexDb, "list1", mySlice...)
 
 	keys, err := s.Keys(indexDb, "*")
 	if err != nil {

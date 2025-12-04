@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"time"
 
-	"com.github.andrelcunha.goodiesdb/internal/core/store"
+	"github.com/andrelcunha/goodiesdb/internal/core/store"
 )
 
 func aofRename(parts []string, s *store.Store, dbIndex int) {
@@ -42,13 +42,21 @@ func aofLPop(parts []string, s *store.Store, dbIndex int) {
 
 func aofRPush(parts []string, s *store.Store, dbIndex int) {
 	if len(parts) >= 4 {
-		s.RPush(dbIndex, parts[2], parts[3:]...)
+		values := make([]any, len(parts[3:]))
+		for i, v := range parts[3:] {
+			values[i] = v
+		}
+		s.RPush(dbIndex, parts[2], values...)
 	}
 }
 
 func aofLPush(parts []string, s *store.Store, dbIndex int) {
 	if len(parts) >= 4 {
-		s.LPush(dbIndex, parts[2], parts[3:]...)
+		values := make([]any, len(parts[3:]))
+		for i, v := range parts[3:] {
+			values[i] = v
+		}
+		s.LPush(dbIndex, parts[2], values...)
 	}
 }
 
