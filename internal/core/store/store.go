@@ -113,8 +113,18 @@ func (s *Store) AOFChannel() chan string {
 
 // Set sets the value for a key
 // Consider ret
-func (s *Store) Set(dbIndex int, key string, rawValue any) bool {
-
+func (s *Store) Set(dbIndex int, key string, rawValue any, args ...string) (bool, error) {
+	setOptions, err := parseSetOptions(args)
+	if err != nil {
+		return false, err
+	}
+	// Handle NX and XX options
+	if setOptions.NX && s.Exists(dbIndex, key) > 0 {
+		return false, nil
+	}
+	if setOptions.XX && s.Exists(dbIndex, key) == 0 {
+		return false, nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	// write to AOF before setting the value (WAL)
@@ -136,7 +146,55 @@ func (s *Store) Set(dbIndex int, key string, rawValue any) bool {
 		value = NewStringValue(fmt.Sprintf("%v", rawValue))
 	}
 	s.data[dbIndex][key] = *value
-	return true
+	return true, nil
+}
+
+type SetOptions struct {
+	NX bool // Only set if key does not exist
+	XX bool // Only set if key exists
+	EX int  // Expire time in seconds
+	PX int  // Expire time in milliseconds
+}
+
+func parseSetOptions(args []string) (*SetOptions, error) {
+	options := &SetOptions{}
+	i := 0
+	for i < len(args) {
+		switch strings.ToUpper(args[i]) {
+		case "NX":
+			options.NX = true
+			i++
+		case "XX":
+			options.XX = true
+			i++
+		case "EX":
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("missing value for EX option")
+			}
+			seconds, err := strconv.Atoi(args[i+1])
+			if err != nil {
+				return nil, fmt.Errorf("invalid value for EX option")
+			}
+			options.EX = seconds
+			i += 2
+		case "PX":
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("missing value for PX option")
+			}
+			milliseconds, err := strconv.Atoi(args[i+1])
+			if err != nil {
+				return nil, fmt.Errorf("invalid value for PX option")
+			}
+			options.PX = milliseconds
+			i += 2
+		default:
+			return nil, fmt.Errorf("unknown option: %s", args[i])
+		}
+	}
+	if options.NX && options.XX {
+		return nil, fmt.Errorf("ERR syntax error")
+	}
+	return options, nil
 }
 
 // Get gets the value for a key
@@ -231,7 +289,7 @@ func (s *Store) SetNX(dbIndex int, key, value string) int {
 	if s.Exists(dbIndex, key) > 0 {
 		return 0
 	}
-	if s.Set(dbIndex, key, value) {
+	if ok, err := s.Set(dbIndex, key, value); ok && err == nil {
 		return 1
 	}
 	return 0

@@ -172,11 +172,17 @@ func (s *Server) executeCommand(conn net.Conn, request protocol.RESPValue) (prot
 		return protocol.ErrorString("ERR invalid password"), nil
 
 	case "SET":
-		if len(parts) != 3 {
+		if len(parts) < 3 {
 			return protocol.ErrorString("ERR wrong number of arguments for 'SET' command"), nil
 		}
-		s.store.Set(dbIndex, parts[1], parts[2])
-		return protocol.SimpleString("OK"), nil
+		ok, err := s.store.Set(dbIndex, parts[1], parts[2], parts[3:]...)
+		if err != nil {
+			return protocol.ErrorString(err.Error()), nil
+		}
+		if ok {
+			return protocol.SimpleString("OK"), nil
+		}
+		return s.Protocol.EncodeNil(), nil
 
 	case "GET":
 		if len(parts) != 2 {
