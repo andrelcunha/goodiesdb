@@ -63,8 +63,7 @@ func TestRebuildStoreFromAOF(t *testing.T) {
 	// set new aofFilename
 
 	// Verify Key2 has been renamed to RenamedKey
-	valInterface, ok := newStore.Get(dbIndex, "RenamedKey")
-	value := valInterface.(store.Value)
+	value, ok := newStore.Get(dbIndex, "RenamedKey")
 	valStr := value.Data.(string)
 
 	if !ok || valStr != "Value2" {
@@ -106,8 +105,7 @@ func TestAofRename(t *testing.T) {
 	s.Set(dbIndex, "Key1", "value1")
 
 	aofRename(parts, s, dbIndex)
-	valInterface, ok := s.Get(dbIndex, "newName")
-	value := valInterface.(store.Value)
+	value, ok := s.Get(dbIndex, "newName")
 	valStr := value.Data.(string)
 
 	if !ok || valStr != "value1" {

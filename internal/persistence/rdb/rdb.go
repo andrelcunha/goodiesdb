@@ -21,7 +21,7 @@ func SaveSnapshot(s *store.Store, filename string) error {
 
 	// Create a struct to hold both data and expires for encoding
 	snapshot := struct {
-		Data []map[string]store.Value
+		Data []map[string]*store.Value
 	}{
 		Data: data,
 	}
@@ -41,7 +41,7 @@ func LoadSnapshot(s *store.Store, filename string) error {
 
 	// Create a struct to decode into
 	var snapshot struct {
-		Data []map[string]store.Value
+		Data []map[string]*store.Value
 	}
 
 	err = decoder.Decode(&snapshot)

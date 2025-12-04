@@ -16,7 +16,7 @@ func TestStore(t *testing.T) {
 	if !ok {
 		t.Fatalf("Failed to get key")
 	}
-	valStr := value.(Value).Data.(string)
+	valStr := value.Data.(string)
 	if valStr != "Value1" {
 		t.Fatalf("Expected Value1, got %s", valStr)
 	}
@@ -52,7 +52,7 @@ func TestSetNX(t *testing.T) {
 		t.Fatalf("Expected SETNX to fail for Key1")
 	}
 	value, ok := s.Get(0, "Key1")
-	valStr := value.(Value).Data.(string)
+	valStr := value.Data.(string)
 	if !ok || valStr != "Value1" {
 		t.Fatalf("Expected Value1 for Key1, got %s", valStr)
 	}
@@ -388,7 +388,7 @@ func TestRename(t *testing.T) {
 		t.Fatalf("Expected ok equal false, got %v", ok)
 	}
 	if value != nil {
-		t.Fatalf("Expected nil, got %s", value)
+		t.Fatalf("Expected nil, got %v", value)
 	}
 
 	// test if Rename does not rename when key exists
@@ -399,7 +399,7 @@ func TestRename(t *testing.T) {
 	if !ok {
 		t.Fatalf("Expected ok equal true, got %v", ok)
 	}
-	valStr := value.(Value).Data.(string)
+	valStr := value.Data.(string)
 	if valStr != "value1" {
 		t.Fatalf("Expected value1, got %s", valStr)
 	}
@@ -415,7 +415,7 @@ func TestRename(t *testing.T) {
 	if !ok {
 		t.Fatalf("Expected ok equal true, got %v", ok)
 	}
-	valStr = value.(Value).Data.(string)
+	valStr = value.Data.(string)
 	if valStr != "value1" {
 		t.Fatalf("Expected value1, got %s", valStr)
 	}
