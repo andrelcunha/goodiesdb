@@ -4,24 +4,30 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Set sets the value for a key
-// Consider ret
 func (s *Store) Set(dbIndex int, key string, rawValue any, args ...string) (bool, error) {
 	setOptions, err := parseSetOptions(args)
 	if err != nil {
 		return false, err
 	}
-	// Handle NX and XX options
-	if setOptions.NX && s.Exists(dbIndex, key) > 0 {
-		return false, nil
-	}
-	if setOptions.XX && s.Exists(dbIndex, key) == 0 {
-		return false, nil
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Handle NX and XX options atomically under the lock
+	if setOptions.NX {
+		existing, ok := s.data[dbIndex][key]
+		if ok && !existing.IsExpired() && existing.Data != nil {
+			return false, nil
+		}
+	}
+	if setOptions.XX {
+		existing, ok := s.data[dbIndex][key]
+		if !ok || existing.IsExpired() || existing.Data == nil {
+			return false, nil
+		}
+	}
 	// write to AOF before setting the value (WAL)
 	s.appendAOF("SET", dbIndexArg(dbIndex), key, fmt.Sprintf("%v", rawValue))
 	var value *Value
@@ -39,6 +45,13 @@ func (s *Store) Set(dbIndex int, key string, rawValue any, args ...string) (bool
 	default:
 		// Fallback to string representation
 		value = NewStringValue(fmt.Sprintf("%v", rawValue))
+	}
+	if setOptions.EX > 0 {
+		value.SetExpiration(time.Duration(setOptions.EX) * time.Second)
+		s.appendAOF("EXPIRE", dbIndexArg(dbIndex), key, strconv.Itoa(setOptions.EX))
+	} else if setOptions.PX > 0 {
+		value.SetExpiration(time.Duration(setOptions.PX) * time.Millisecond)
+		s.appendAOF("EXPIRE", dbIndexArg(dbIndex), key, strconv.Itoa(setOptions.PX/1000))
 	}
 	s.data[dbIndex][key] = value
 	return true, nil

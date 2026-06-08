@@ -270,12 +270,11 @@ func (s *Store) TTL(dbIndex int, key string) (int, error) {
 }
 
 // LPush inserts values at the begining of a list
-func (s *Store) LPush(dbIndex int, key string, values ...any) int {
+func (s *Store) LPush(dbIndex int, key string, values ...any) (int, error) {
 	strValues := make([]string, len(values))
 	for i, v := range values {
 		strValues[i] = fmt.Sprintf("%v", v)
 	}
-	s.appendAOF("LPUSH", append([]string{dbIndexArg(dbIndex), key}, strValues...)...)
 	if len(values) > 1 {
 		slice.Reverse(values)
 	}
@@ -284,36 +283,45 @@ func (s *Store) LPush(dbIndex int, key string, values ...any) int {
 
 	value, ok := s.data[dbIndex][key]
 	if !ok {
+		s.appendAOF("LPUSH", append([]string{dbIndexArg(dbIndex), key}, strValues...)...)
 		s.data[dbIndex][key] = NewListValue(values)
-		return len(values)
+		return len(values), nil
 	}
-	list, _ := value.AsList()
+	list, err := value.AsList()
+	if err != nil {
+		return 0, err
+	}
+	s.appendAOF("LPUSH", append([]string{dbIndexArg(dbIndex), key}, strValues...)...)
 	list = append(values, list...)
 	value.Data = list
 	s.data[dbIndex][key] = value
-	return len(list)
+	return len(list), nil
 }
 
 // RPush inserts values at the end of a list
-func (s *Store) RPush(dbIndex int, key string, values ...any) int {
+func (s *Store) RPush(dbIndex int, key string, values ...any) (int, error) {
 	strValues := make([]string, len(values))
 	for i, v := range values {
 		strValues[i] = fmt.Sprintf("%v", v)
 	}
-	s.appendAOF("RPUSH", append([]string{dbIndexArg(dbIndex), key}, strValues...)...)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	value, ok := s.data[dbIndex][key]
 	if !ok {
+		s.appendAOF("RPUSH", append([]string{dbIndexArg(dbIndex), key}, strValues...)...)
 		s.data[dbIndex][key] = NewListValue(values)
-		return len(values)
+		return len(values), nil
 	}
-	list, _ := value.AsList()
+	list, err := value.AsList()
+	if err != nil {
+		return 0, err
+	}
+	s.appendAOF("RPUSH", append([]string{dbIndexArg(dbIndex), key}, strValues...)...)
 	list = append(list, values...)
 	value.Data = list
 	s.data[dbIndex][key] = value
-	return len(list)
+	return len(list), nil
 }
 
 // LPop removes and returns the first N elements of the list, where N is equal to count, or nil if the list is empty.
@@ -498,7 +506,8 @@ func (s *Store) LTrim(dbIndex int, key string, start, stop int) error {
 	}
 
 	if start > stop || start >= len {
-		s.Del(dbIndex, key)
+		s.delKey(dbIndex, key)
+		s.appendAOF("DEL", dbIndexArg(dbIndex), key)
 		return nil
 	}
 
@@ -564,8 +573,8 @@ func (s *Store) Type(dbIndex int, key string) string {
 
 // Keys returns all keys matching a pattern
 func (s *Store) Keys(dbIndex int, pattern string) ([]string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	keys := []string{}
 	// Convert Redis-like pattern to a valid regex
