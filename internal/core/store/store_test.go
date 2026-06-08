@@ -177,7 +177,7 @@ func TestLPush(t *testing.T) {
 	s := NewStore(aofChan)
 
 	//test if the response is correct
-	listLen := s.LPush(0, "list", "value1", "value2")
+	listLen, _ := s.LPush(0, "list", "value1", "value2")
 	if listLen != 2 {
 		t.Fatalf("Expected response to be 2, got %d", listLen)
 	}
@@ -206,7 +206,7 @@ func TestRPush(t *testing.T) {
 	s := NewStore(aofChan)
 
 	//test if the response is correct
-	listLen := s.RPush(0, "list", "value1", "value2")
+	listLen, _ := s.RPush(0, "list", "value1", "value2")
 	if listLen != 2 {
 		t.Fatalf("Expected response to be 2, got %d", listLen)
 	}

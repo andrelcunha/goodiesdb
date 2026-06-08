@@ -28,6 +28,9 @@ func (c *LPushCommand) Execute(ctx *Context, args []string) (protocol.RESPValue,
 	for i := 1; i < len(args); i++ {
 		values[i-1] = args[i]
 	}
-	length := ctx.Store.LPush(ctx.DBIndex, args[0], values...)
+	length, err := ctx.Store.LPush(ctx.DBIndex, args[0], values...)
+	if err != nil {
+		return protocol.ErrorString(err.Error()), nil
+	}
 	return protocol.Integer(int64(length)), nil
 }

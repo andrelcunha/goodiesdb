@@ -3,6 +3,7 @@ package resp2
 import (
 	"bufio"
 	"fmt"
+	"io"
 
 	"github.com/ottermq/goodiesdb/internal/protocol"
 )
@@ -42,7 +43,7 @@ func (*RESP2Protocol) parseBulkString(reader *bufio.Reader) (protocol.RESPValue,
 		return protocol.BulkString(nil), nil // Null Bulk String
 	}
 	data := make([]byte, length+2)
-	_, err = reader.Read(data)
+	_, err = io.ReadFull(reader, data)
 	if err != nil {
 		return nil, err
 	}

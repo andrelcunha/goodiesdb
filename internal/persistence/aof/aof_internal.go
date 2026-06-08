@@ -46,7 +46,7 @@ func aofRPush(parts []string, s *store.Store, dbIndex int) {
 		for i, v := range parts[3:] {
 			values[i] = v
 		}
-		s.RPush(dbIndex, parts[2], values...)
+		_, _ = s.RPush(dbIndex, parts[2], values...)
 	}
 }
 
@@ -56,7 +56,7 @@ func aofLPush(parts []string, s *store.Store, dbIndex int) {
 		for i, v := range parts[3:] {
 			values[i] = v
 		}
-		s.LPush(dbIndex, parts[2], values...)
+		_, _ = s.LPush(dbIndex, parts[2], values...)
 	}
 }
 

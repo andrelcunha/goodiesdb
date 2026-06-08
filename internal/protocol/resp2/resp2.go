@@ -45,6 +45,9 @@ func (r2 *RESP2Protocol) Encode(writer *bufio.Writer, value protocol.RESPValue) 
 		return r2.encodeBulkString(value, writer)
 	case protocol.Array:
 		return r2.encodeArray(value, writer)
+	case protocol.Null:
+		_, err := writer.WriteString("$-1\r\n")
+		return err
 	}
 	return fmt.Errorf("encoding for type %T not implemented", value)
 }

@@ -25,9 +25,12 @@ func (c *ExpireCommand) Validate(args []string) error {
 }
 
 func (c *ExpireCommand) Execute(ctx *Context, args []string) (protocol.RESPValue, error) {
-	ttl, err := parseIntArg(args[1], "invalid TTL")
+	ttl, err := parseIntArg(args[1], "invalid expire time in 'expire' command")
 	if err != nil {
 		return nil, err
+	}
+	if ttl < 0 {
+		return protocol.ErrorString("ERR invalid expire time in 'expire' command"), nil
 	}
 
 	if ctx.Store.Expire(ctx.DBIndex, args[0], time.Duration(ttl)*time.Second) {
