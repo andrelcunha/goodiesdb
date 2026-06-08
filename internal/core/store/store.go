@@ -564,8 +564,8 @@ func (s *Store) Type(dbIndex int, key string) string {
 
 // Keys returns all keys matching a pattern
 func (s *Store) Keys(dbIndex int, pattern string) ([]string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	keys := []string{}
 	// Convert Redis-like pattern to a valid regex
