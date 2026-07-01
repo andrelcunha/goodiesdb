@@ -1,7 +1,18 @@
-VERSION := $(shell git describe --tags --always)
+BINARY_NAME=goodiesdb-server
+MAIN_PATH=cmd/goodiesdb-server
+BUILD_DIR=bin
+
+PREFIX ?= /usr/local
+BINDIR ?= $(PREFIX)/bin
 
 run: build
-	@./bin/goodiesdb-server
+	@./$(BUILD_DIR)/$(BINARY_NAME)
 
 build:
-	@go build -ldflags "-X main.version=$(VERSION)" -o bin/goodiesdb-server ./cmd/goodiesdb-server
+	@mkdir -p $(BUILD_DIR)
+	@VERSION=$$(git describe --tags --always 2>/dev/null || echo dev); \
+	go build -ldflags "-X main.version=$$VERSION" -o ./$(BUILD_DIR)/$(BINARY_NAME) ./$(MAIN_PATH)
+
+install: build
+	@mkdir -p $(BINDIR)
+	@install -m 0755 ./$(BUILD_DIR)/$(BINARY_NAME) $(BINDIR)/$(BINARY_NAME)
